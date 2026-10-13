@@ -1,0 +1,9 @@
+// Public build configuration only. Never place credentials in this file.
+CAN_DEVELOPMENT_TEAM = YOUR_TEAM_ID
+CAN_BUNDLE_ID = com.yourcompany.can
+CAN_WIDGET_BUNDLE_ID = com.yourcompany.can.widget
+CAN_APP_GROUP = group.com.yourcompany.can
+CAN_KEYCHAIN_GROUP = com.yourcompany.can.shared
+CAN_API_BASE_URL = https:/$()/api.example.invalid
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
