@@ -1,7 +1,7 @@
 name: can-production
 
 x-backend: &backend
-  image: can-api:${CAN_RELEASE:?Set CAN_RELEASE to the reviewed source revision}
+  image: ${CAN_IMAGE:-can-api:${CAN_RELEASE:?Set CAN_RELEASE to the reviewed source revision}}
   build:
     context: ..
     dockerfile: infra/Dockerfile

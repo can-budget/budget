@@ -22,7 +22,8 @@ address so unrelated callers do not share a single proxy-IP rate-limit bucket.
 Do not publish API port 8000 or attach untrusted containers to these networks
 without restricting `--forwarded-allow-ips` to an explicit trusted proxy address.
 
-Prerequisites: an owner-controlled Linux server with Docker Engine and Compose v2,
+Prerequisites: an owner-controlled Linux server with host Python 3.11+ available
+as `/usr/bin/python3`/`python3`, `curl`, Docker Engine and Compose v2,
 DNS pointing to it, inbound 80/443, outbound Apple/ACME access, synchronized clock
 and disk monitoring. No package here provisions a server or firewall.
 
@@ -31,7 +32,8 @@ interactive environment, without storing them in tracked files:
 
 | Variable | Meaning |
 | --- | --- |
-| `CAN_RELEASE` | Reviewed source revision / image tag; keep it stable during recovery |
+| `CAN_RELEASE` | Reviewed source revision / fallback local image tag; keep it stable during recovery |
+| `CAN_IMAGE` | Optional immutable GHCR image reference; required by automatic delivery, overrides the local tag |
 | `CAN_DOMAIN`, `CAN_ACME_EMAIL` | Public API hostname and owner's certificate contact |
 | `CAN_SECRETS_DIR` | Absolute owner-managed directory outside the checkout |
 | `CAN_DELETION_JOURNAL_DIR` | Persistent private journal directory, normally `/var/lib/can-deletions` |
@@ -324,8 +326,13 @@ retry commands with new IDs or reset the production database to clear an error.
 Inspect health/container status and aggregate metrics without copying private
 logs into issue trackers. If recovery is needed, use the isolated path above.
 
-CI is verification-only: it cannot deploy, upload TestFlight or read owner keys.
-Its disposable PostgreSQL service permits trust authentication only on runner
+CI verifies every push/PR. After all checks pass, a push to `main` publishes a
+backend image and deploys its digest through the restricted server receiver.
+See [CI/CD setup and failure handling](CI_CD.md); account-side settings and initial
+server bootstrap are required and have not been performed in this task.
+Only the main deploy job receives its dedicated SSH key; there are no Apple
+signing credentials or TestFlight uploads in this pipeline.
+The disposable PostgreSQL service permits trust authentication only on runner
 loopback; production uses separate file-backed credentials and SCRAM. The macOS
 job selects the installed Xcode 26.3 to compile the widget push branch, builds
 app/widget without signing, and runs Swift fixtures and domain tests; it is not

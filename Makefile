@@ -26,6 +26,7 @@ contract-check:
 infra-check:
 	$(PYTHON) infra/static_check.py
 infra-test:
+	# Recovery and release safety tests use temporary files and fake transports.
 	$(PYTHON) -m pytest infra/tests
 ios-project-check:
 	$(PYTHON) apps/ios/tools/check_project.py

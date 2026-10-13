@@ -1,4 +1,4 @@
-name: Verify
+name: Verify and deploy
 
 on:
   pull_request:
@@ -10,7 +10,9 @@ permissions:
 
 concurrency:
   group: verify-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel a main deployment during a migration. Newer pending commits may
+  # supersede older pending runs; the server also enforces a monotonic sequence.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   backend:
@@ -77,3 +79,76 @@ jobs:
         run: make ios-build
       - name: Run app domain and reconciliation tests
         run: make ios-test
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'can-budget/budget'
+    needs: [backend, postgres, ios]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Require the current main revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_deploy_head.py
+      - name: Build and publish the reviewed backend image
+        id: image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOCKER_CONFIG
+          DOCKER_CONFIG="$(mktemp -d)"
+          trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          unset GH_TOKEN
+          image="ghcr.io/can-budget/budget-api"
+          tag="$image:$GITHUB_SHA-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT"
+          docker build --pull --platform linux/amd64 --file infra/Dockerfile \
+            --label "org.opencontainers.image.source=https://github.com/can-budget/budget" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag "$tag" .
+          docker push "$tag"
+          digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$tag")"
+          [[ "$digest" =~ ^ghcr\.io/can-budget/budget-api@sha256:[0-9a-f]{64}$ ]]
+          printf 'image=%s\n' "$digest" >>"$GITHUB_OUTPUT"
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'can-budget/budget'
+    needs: publish
+    runs-on: ubuntu-24.04
+    # Includes a bounded off-host backup (up to two hours) plus pull/migration.
+    timeout-minutes: 180
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Require the current main revision immediately before deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_deploy_head.py
+      - name: Send release to the restricted production receiver
+        env:
+          CAN_IMAGE: ${{ needs.publish.outputs.image }}
+          CAN_DEPLOY_HOST: ${{ vars.CAN_DEPLOY_HOST }}
+          CAN_DEPLOY_PORT: ${{ vars.CAN_DEPLOY_PORT }}
+          CAN_DEPLOY_USER: ${{ vars.CAN_DEPLOY_USER }}
+          CAN_DEPLOY_SSH_KEY: ${{ secrets.CAN_DEPLOY_SSH_KEY }}
+          CAN_DEPLOY_KNOWN_HOSTS: ${{ secrets.CAN_DEPLOY_KNOWN_HOSTS }}
+        run: bash infra/scripts/send-release.sh
+      - name: Record deployed revision
+        env:
+          CAN_IMAGE: ${{ needs.publish.outputs.image }}
+        run: |
+          printf 'Source: `%s`\n\nImage: `%s`\n' "$GITHUB_SHA" "$CAN_IMAGE" >>"$GITHUB_STEP_SUMMARY"

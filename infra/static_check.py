@@ -29,13 +29,10 @@ def main() -> None:
         assert "healthcheck" in service
         for key, value in service["environment"].items():
             if any(
-                token in key
-                for token in ("PASSWORD", "ENCRYPTION_KEY", "HMAC_KEY", "PRIVATE_KEY")
+                token in key for token in ("PASSWORD", "ENCRYPTION_KEY", "HMAC_KEY", "PRIVATE_KEY")
             ):
                 assert key.endswith("_FILE") and str(value).startswith("/run/secrets/")
-        journal_mounts = [
-            mount for mount in service["volumes"] if "can-deletions" in str(mount)
-        ]
+        journal_mounts = [mount for mount in service["volumes"] if "can-deletions" in str(mount)]
         assert len(journal_mounts) == 1
         assert str(journal_mounts[0]).endswith(":ro") is (name == "api")
     for secret in compose["secrets"].values():
@@ -45,6 +42,19 @@ def main() -> None:
     assert "ports" not in restore["services"]["restore-db"]
     assert restore["volumes"].keys().isdisjoint(compose["volumes"])
     assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["concurrency"]["cancel-in-progress"] == "${{ github.ref != 'refs/heads/main' }}"
+    publish = workflow["jobs"]["publish"]
+    deploy = workflow["jobs"]["deploy"]
+    assert set(publish["needs"]) == {"backend", "postgres", "ios"}
+    assert publish["permissions"] == {"contents": "read", "packages": "write"}
+    assert deploy["needs"] == "publish"
+    assert deploy["permissions"] == {"contents": "read"}
+    assert deploy["environment"] == "production"
+    for job in (publish, deploy):
+        assert job["if"] == (
+            "github.event_name == 'push' && github.ref == 'refs/heads/main' "
+            "&& github.repository == 'can-budget/budget'"
+        )
     for job in workflow["jobs"].values():
         for step in job["steps"]:
             if "uses" in step:
@@ -54,19 +64,17 @@ def main() -> None:
         subprocess.run(["bash", "-n", str(script)], check=True)
     ast.parse((ROOT / "infra/verify_restore.py").read_text())
     ast.parse((ROOT / "infra/deletion_journal.py").read_text())
+    for script in (ROOT / "infra/scripts").glob("*.py"):
+        ast.parse(script.read_text())
     recovery = (ROOT / "infra/scripts/restore.sh").read_text()
-    assert recovery.index('deletion_journal.py" fetch') < recovery.index(
-        '"${compose[@]}" up'
-    )
+    assert recovery.index('deletion_journal.py" fetch') < recovery.index('"${compose[@]}" up')
     assert "export-pending" in recovery and 'deletion_journal.py" replicate' in recovery
     verify = (ROOT / "infra/scripts/verify-restore.sh").read_text()
     assert verify.index('" check') < verify.index("docker run")
     print(
-        f"PASS: 2 Compose files, CI policy, {len(shell_files)} shell scripts, recovery Python syntax"
+        f"PASS: 2 Compose files, CI/CD policy, {len(shell_files)} shell scripts, infrastructure Python syntax"
     )
-    print(
-        "NOT RUN: Docker image build, Compose schema/runtime, HTTPS, PostgreSQL, backup/restore."
-    )
+    print("NOT RUN: Docker image build, Compose schema/runtime, HTTPS, PostgreSQL, backup/restore.")
 
 
 if __name__ == "__main__":

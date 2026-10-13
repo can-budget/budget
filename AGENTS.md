@@ -42,7 +42,7 @@ only checks actually executed and reported may be treated as passing.
 - Test one: `make test-one TEST=services/api/tests/test_file.py`.
 - Lint: `make lint`; format: `make format`; typecheck: `make typecheck`.
 - Reference: `make reference-check`; both contracts: `make contract-check`; infrastructure static checks: `make infra-check`.
-- Recovery journal tests: `make infra-test` (temporary files and fake transport only; no database, cloud or systemd mutation); included in `make verify`.
+- Recovery and release safety tests: `make infra-test` (temporary files, hostile archives and fake transport/commands only; no database, SSH, cloud or systemd mutation); included in `make verify`.
 - Full local verification: `make verify` (unit/static/reference tests only; no database connection, deploy or migrations).
 - Source credential patterns: `make secret-check` (offline, no runtime credential reads); included in `make verify`.
 - iOS metadata: `make ios-project-check` (no Swift compilation); included in `make verify`.
