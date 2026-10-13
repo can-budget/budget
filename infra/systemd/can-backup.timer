@@ -1,0 +1,11 @@
+[Unit]
+Description=Can database backup twice daily
+
+[Timer]
+OnCalendar=*-*-* 03,15:10:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+Unit=can-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,25 @@
+[Unit]
+Description=Verify encrypted deletion journal off-host before acknowledging deletion
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=can-operator
+Group=can-operator
+# The owner provisions this group with GID 10001, matching the API container.
+SupplementaryGroups=can-runtime
+WorkingDirectory=/opt/can/current
+# Non-secret paths and identifiers only. The encryption key remains in its file.
+EnvironmentFile=/etc/can/runtime.conf
+ExecStart=/usr/bin/python3 /opt/can/current/infra/deletion_journal.py replicate
+UMask=0027
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/can-deletions
+TimeoutStartSec=10min
+
+[Install]
+WantedBy=multi-user.target

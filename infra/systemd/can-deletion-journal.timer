@@ -1,0 +1,12 @@
+[Unit]
+Description=Replicate the Can deletion journal every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=60s
+AccuracySec=5s
+Persistent=true
+Unit=can-deletion-journal.service
+
+[Install]
+WantedBy=timers.target
