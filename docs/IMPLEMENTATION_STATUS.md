@@ -19,8 +19,12 @@ installation and physical-device checks until the implementation is ready.
 - Account deletion under the approved preserve-ledger policy: durable jobs,
   identity erasure, Apple credential revocation, exact lost-response replay,
   independent recovery journal and scoped, resumable iPhone cleanup.
-- CI definitions for Python, disposable PostgreSQL and unsigned Xcode checks.
-  The remote workflow has not been run in this session.
+- CI definitions for Python, disposable PostgreSQL and unsigned Xcode checks;
+  main-only GHCR publication and digest-based backend delivery after all gates.
+  The receiver/deployer validate source, serialize releases, verify off-host
+  backup before migration, check container/public HTTPS health and preserve
+  failure state without an automatic SQL rollback. GitHub/VPS activation is
+  documented in `infra/CI_CD.md`; no remote workflow has run in this session.
 
 The original calculation rules and source handoff remain unchanged. The active
 transport contract is in `contracts/openapi.yaml`; clarifications are documented
@@ -38,10 +42,10 @@ Final `make verify` completed successfully in this Linux environment:
 | Original calculation suite | 7 methods PASS, including 240 golden cases and randomized invariants |
 | Original contract verifier | PASS, 48 schemas / 246 references / 23 operations |
 | Active implementation contract | PASS, 50 schemas / 267 references / 25 operations |
-| Infrastructure static checks | PASS, 2 Compose files, CI policy, 5 shell scripts and recovery Python syntax |
-| Recovery journal unit tests | 35 PASS, including actual backend/host-tool signature, ciphertext, ACK, completion and retention interoperability |
+| Infrastructure static checks | PASS, 2 Compose files, CI/CD policy, 7 shell scripts and infrastructure Python syntax |
+| Infrastructure unit tests | 111 PASS: 35 journal protocol tests, 51 deployment safety tests and 25 transport/head-gate tests; all use temporary state and controlled transports |
 | iOS project static checks | PASS, 3 targets, scheme, entitlements, icon and fixture identity; 25 XCTest methods registered |
-| Recognizable credential-pattern check | PASS, 97 authored text files; this is a bounded pattern check, not proof that arbitrary secrets are absent |
+| Recognizable credential-pattern check | PASS, 106 authored text files; this is a bounded pattern check, not proof that arbitrary secrets are absent |
 
 The Python suite emits one Starlette TestClient deprecation warning about its
 httpx adapter. It does not affect the recorded test result.
@@ -55,7 +59,7 @@ Additional executed checks:
 - The credential checker rejected a synthetic token in a temporary fixture and
   did not include its value in the error output.
 - `git diff --cached --check` passed for the local commit groups. Implementation
-  and verification tooling are committed through `046a921`; the following
+  and CI/CD tooling are committed through `5283203`; the following
   documentation commit records this report. No release build has been produced.
 - Earlier in this implementation, an in-process `/health/live` check and Python
   calculation AST comparison passed. Swift calculation/fixture byte identity
@@ -71,6 +75,9 @@ transaction or migration correctness on a running database.
 - PostgreSQL migration execution and all 18 database integration cases:
   `make test-postgres` requires an explicitly selected disposable database.
 - Docker image build and actual Compose startup, DNS/TLS and production health.
+- GitHub environment/branch rules, GHCR publication, dedicated SSH credentials,
+  server bootstrap and a real main-to-production workflow run. The deploy tests
+  use fake commands and temporary files, not a production Docker daemon.
 - Swift compilation, the 25 XCTest methods, simulator behavior and two-phone
   offline/shared-budget acceptance. Run `make ios-build` and `make ios-test`
   with the Xcode/SDK described in `apps/ios/README.md`.
@@ -127,6 +134,8 @@ still need the runtime verification listed above.
 ## Release references
 
 - [Production, backup and recovery](../infra/README.md)
+- [Backend CI/CD activation and retry](../infra/CI_CD.md)
+- [Two-phone release choices and expiry](IOS_DELIVERY.md)
 - [iOS configuration, signing and TestFlight](../apps/ios/README.md)
 - [Backend setup and tests](../services/api/README.md)
 - [Original acceptance criteria](../Can_Developer_Handoff_v1.1/docs/ACCEPTANCE.md)

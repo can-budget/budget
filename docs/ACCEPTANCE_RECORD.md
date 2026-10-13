@@ -17,7 +17,7 @@ personal/financial data in this document.
 
 | Field | Actual value |
 | --- | --- |
-| Source commit | Implementation and tooling: `046a92148e00ae1f3b60d781037d0c42f908af21`; replace with the exact release commit when executing this record |
+| Source commit | Implementation and tooling: `5283203ae7cc395f3d7b65be014a9cb44b227894`; replace with the exact release commit when executing this record |
 | App version / build / archive | NOT RUN |
 | API image digest / migration revision | NOT DEPLOYED |
 | Environment / HTTPS origin | NOT CONNECTED |

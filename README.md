@@ -16,7 +16,7 @@ executed checks and the remaining release work.
 | `services/api/` | FastAPI, PostgreSQL ledger, Apple identity verification, migrations and APNs worker |
 | `contracts/` | Active API contract and documented transport clarifications |
 | `infra/` | Production Compose, HTTPS, encrypted backup and isolated restore tools |
-| `.github/workflows/verify.yml` | Python, disposable PostgreSQL and unsigned macOS verification |
+| `.github/workflows/verify.yml` | Verification on pushes/PRs; main-only image publication and backend deployment |
 | `Can_Developer_Handoff_v1.1/` | Unmodified source specification, acceptance criteria and calculation fixtures |
 
 No categories, bank integrations, administrator role, alternative login or
@@ -65,8 +65,12 @@ credentials. There is no fake-login route or seeded runtime budget.
 
 Follow [production operations](infra/README.md) for the single-server deployment,
 credential-file mounts, first migration, updates, backup and isolated recovery.
+Follow [backend CI/CD activation](infra/CI_CD.md) for `dev` checks and automatic
+`main` deployment. The workflow is prepared; GitHub settings and the VPS must
+still be connected and bootstrapped before it can run successfully.
 Keep credentials outside the repository. Follow [iOS instructions](apps/ios/README.md)
-for owner signing and TestFlight delivery. Use the original
+for owner signing and [two-phone delivery](docs/IOS_DELIVERY.md) for manual
+TestFlight/Ad Hoc choices and their expiry requirements. Use the original
 [acceptance checklist](Can_Developer_Handoff_v1.1/docs/ACCEPTANCE.md)
 for the final two-phone run; the staging-specific requirements are superseded by
 the owner's single-production decision.
