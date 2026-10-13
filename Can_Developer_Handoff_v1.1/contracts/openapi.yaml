@@ -1,0 +1,2905 @@
+openapi: 3.1.0
+info:
+  title: Can shared budget API
+  version: 1.1.0
+  description: Can v1.1 developer handoff. Approved product rules 2026-10-12. Design
+    contract, not an implemented server. Integer hundredths; calculation_version=2;
+    up to 10 equal members, one active membership per user. See docs/BUDGET_RULES.md
+    and docs/DECISIONS.md. Account-deletion data policy is a release gate.
+servers:
+- url: https://api.example.invalid
+  description: 'Placeholder: replace during M0; no live server exists.'
+security:
+- session: []
+paths:
+  /v1/auth/apple/challenge:
+    post:
+      operationId: auth_challenge
+      summary: Create one-time nonce challenge
+      description: Create one-time nonce challenge. Rate-limited; hash raw_nonce before
+        sending nonce to Apple.
+      tags:
+      - auth
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+  /v1/auth/apple:
+    post:
+      operationId: auth_apple
+      summary: Verify Apple identity, nonce and code; create a session and short-lived
+        reauthentication proof
+      description: Verify Apple identity, nonce and code; create a session and short-lived
+        reauthentication proof.
+      tags:
+      - auth
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResult'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppleLogin'
+  /v1/auth/refresh:
+    post:
+      operationId: auth_refresh
+      summary: Rotate session
+      description: Rotate session. Retry the same refresh_request_id for a lost response;
+        detect old-token reuse with another ID.
+      tags:
+      - auth
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTokens'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+  /v1/auth/logout:
+    post:
+      operationId: auth_logout
+      summary: Revoke current session and related widget tokens
+      description: Revoke current session and related widget tokens.
+      tags:
+      - auth
+      responses:
+        '204':
+          description: Successful response
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+  /v1/auth/apple/notifications:
+    post:
+      operationId: auth_apple_notification
+      summary: Verify signed Apple server notification before revoking affected sessions
+      description: Verify signed Apple server notification before revoking affected
+        sessions. No unverified payload is trusted.
+      tags:
+      - auth
+      responses:
+        '204':
+          description: Successful response
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedAppleNotification'
+  /v1/me:
+    get:
+      operationId: profile_get
+      summary: Current user and active cabinet or null
+      description: Current user and active cabinet or null.
+      tags:
+      - profile
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+    patch:
+      operationId: profile_update
+      summary: Change display name, not Apple identity
+      description: Change display name, not Apple identity.
+      tags:
+      - profile
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePatch'
+    delete:
+      operationId: profile_delete
+      summary: Request account deletion under the finalized shared-ledger policy
+      description: 'Release gate R-01: finalize the data deletion/anonymization and
+        backup policy before implementing destructive behavior. Authenticated reauthentication,
+        revoke Apple and own credentials, do not confuse with leave_cabinet. Do not
+        claim SET NULL alone meets the policy.'
+      tags:
+      - profile
+      responses:
+        '202':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionAccepted'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
+      parameters:
+      - name: X-Reauth-Token
+        in: header
+        required: true
+        schema:
+          type: string
+  /v1/cabinets:
+    post:
+      operationId: cabinet_create
+      summary: Create one cabinet and membership atomically
+      description: Create one cabinet and membership atomically. Retry command_id
+        returns the same cabinet_id.
+      tags:
+      - cabinet
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CabinetResult'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCabinetRequest'
+  /v1/invitations/preview:
+    post:
+      operationId: invitation_preview
+      summary: Authenticated and rate-limited invitation preview; never includes financial
+        data
+      description: Authenticated and rate-limited invitation preview; never includes
+        financial data.
+      tags:
+      - invitation
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreview'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationCode'
+  /v1/invitations/accept:
+    post:
+      operationId: invitation_accept
+      summary: Join atomically with user and cabinet locks
+      description: Join atomically with user and cabinet locks. At most ten equal
+        members including creator and one active cabinet per user.
+      tags:
+      - invitation
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CabinetResult'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitation'
+  /v1/cabinets/{cabinet_id}/commands:
+    post:
+      operationId: cabinet_command
+      summary: Apply one idempotent command
+      description: Apply one idempotent command. First matching receipt wins; changes,
+        audit, revision, receipt and push outbox commit together.
+      tags:
+      - cabinet
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResult'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Command'
+      parameters:
+      - name: cabinet_id
+        in: path
+        required: true
+        schema: &id001
+          type: string
+          format: uuid
+  /v1/cabinets/{cabinet_id}/sync:
+    post:
+      operationId: cabinet_sync
+      summary: Return one consistent snapshot plus receipts for every requested unresolved
+        ID
+      description: Return one consistent snapshot plus receipts for every requested
+        unresolved ID. Only unknown pending additions may overlay the snapshot.
+      tags:
+      - cabinet
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncRequest'
+      parameters:
+      - name: cabinet_id
+        in: path
+        required: true
+        schema: *id001
+  /v1/cabinets/{cabinet_id}/snapshot:
+    get:
+      operationId: cabinet_snapshot
+      summary: Read current or latest sprint snapshot
+      description: Read current or latest sprint snapshot. Use sync instead when outbox
+        is not empty.
+      tags:
+      - cabinet
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Snapshot'
+          headers:
+            ETag:
+              schema:
+                type: string
+        '304':
+          description: Not modified for revision AND business date
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      parameters:
+      - name: cabinet_id
+        in: path
+        required: true
+        schema: *id001
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+  /v1/cabinets/{cabinet_id}/sprints:
+    get:
+      operationId: sprint_list
+      summary: List current and archived sprints newest first
+      description: List current and archived sprints newest first.
+      tags:
+      - sprint
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SprintPage'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      parameters:
+      - name: cabinet_id
+        in: path
+        required: true
+        schema: *id001
+      - &id002
+        name: cursor
+        in: query
+        schema:
+          type: string
+      - &id003
+        name: limit
+        in: query
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100
+          default: 50
+  /v1/cabinets/{cabinet_id}/sprints/{sprint_id}/entries:
+    get:
+      operationId: entry_list
+      summary: Paginated ledger at observed revision
+      description: Paginated ledger at observed revision. On revision change refresh
+        pages; no value-based duplicate suppression.
+      tags:
+      - entry
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryPage'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      parameters:
+      - name: cabinet_id
+        in: path
+        required: true
+        schema: *id001
+      - name: sprint_id
+        in: path
+        required: true
+        schema: *id001
+      - *id002
+      - *id003
+  /v1/cabinets/{cabinet_id}/sprints/{sprint_id}/entries/{entry_id}:
+    get:
+      operationId: entry_get
+      summary: Read entry details after cabinet ownership check
+      description: Read entry details after cabinet ownership check.
+      tags:
+      - entry
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      parameters:
+      - name: cabinet_id
+        in: path
+        required: true
+        schema: *id001
+      - name: sprint_id
+        in: path
+        required: true
+        schema: *id001
+      - name: entry_id
+        in: path
+        required: true
+        schema: *id001
+  /v1/cabinets/{cabinet_id}/sprints/{sprint_id}/projection:
+    get:
+      operationId: sprint_projection
+      summary: Projection for a chosen historical sprint, recalculated after accepted
+        late corrections
+      description: Projection for a chosen historical sprint, recalculated after accepted
+        late corrections.
+      tags:
+      - sprint
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivedProjection'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      parameters:
+      - name: cabinet_id
+        in: path
+        required: true
+        schema: *id001
+      - name: sprint_id
+        in: path
+        required: true
+        schema: *id001
+  /v1/devices:
+    post:
+      operationId: device_register
+      summary: Idempotently register own installation and separate app/widget push
+        tokens; bind to current session
+      description: Idempotently register own installation and separate app/widget
+        push tokens; bind to current session.
+      tags:
+      - device
+      responses:
+        '204':
+          description: Successful response
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegistration'
+  /v1/devices/{device_id}/widget-token:
+    post:
+      operationId: device_widget_token
+      summary: Issue read-only token for own device and active cabinet, valid for
+        7 days; revoke prior token
+      description: Issue read-only token for own device and active cabinet, valid
+        for 7 days; revoke prior token.
+      tags:
+      - device
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetToken'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - session: []
+      parameters:
+      - name: device_id
+        in: path
+        required: true
+        schema: *id001
+  /v1/widget/snapshot:
+    get:
+      operationId: widget_snapshot
+      summary: Read minimal snapshot using only the scoped widget token; membership
+        checked on every read
+      description: Read minimal snapshot using only the scoped widget token; membership
+        checked on every read.
+      tags:
+      - widget
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetSnapshot'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+      - widget: []
+  /health/live:
+    get:
+      operationId: health_live
+      summary: Process liveness without external Apple dependencies
+      description: Process liveness without external Apple dependencies.
+      tags:
+      - health
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+  /health/ready:
+    get:
+      operationId: health_ready
+      summary: Database and migration readiness; no database credentials in response
+      description: Database and migration readiness; no database credentials in response.
+      tags:
+      - health
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+components:
+  securitySchemes:
+    session:
+      type: http
+      scheme: bearer
+      description: App session only; not Apple identity token.
+    widget:
+      type: http
+      scheme: bearer
+      description: Read-only token scoped to one cabinet/device.
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        request_id: *id001
+        retryable: &id009
+          type: boolean
+        details:
+          type: object
+          properties: {}
+          required: []
+          additionalProperties: true
+      required:
+      - code
+      - message
+      - request_id
+      - retryable
+      - details
+      additionalProperties: false
+    User:
+      type: object
+      properties:
+        id: *id001
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        active_cabinet_id:
+          anyOf:
+          - *id001
+          - type: 'null'
+      required:
+      - id
+      - display_name
+      - active_cabinet_id
+      additionalProperties: false
+    Member:
+      type: object
+      properties:
+        user_id: *id001
+        display_name:
+          type: string
+        joined_at: &id006
+          type: string
+          format: date-time
+      required:
+      - user_id
+      - display_name
+      - joined_at
+      additionalProperties: false
+    Cabinet:
+      type: object
+      properties:
+        id: *id001
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        timezone:
+          type: string
+        revision: &id005
+          type: integer
+          format: int64
+          minimum: 0
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+          maxItems: 10
+          minItems: 1
+      required:
+      - id
+      - name
+      - timezone
+      - revision
+      - members
+      additionalProperties: false
+    Sprint:
+      type: object
+      properties:
+        id: *id001
+        initial_minor: &id008
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 999999999
+        start_date: &id004
+          type: string
+          format: date
+        end_date: *id004
+        calculation_version:
+          type: integer
+          format: int64
+          const: 2
+        status:
+          type: string
+          enum:
+          - active
+          - completed
+        initial_end_date:
+          type: string
+          format: date
+          description: Immutable original end date. end_date is the current effective
+            end date; use sprint_revisions to replay historical days.
+      required:
+      - id
+      - initial_minor
+      - start_date
+      - end_date
+      - calculation_version
+      - status
+      - initial_end_date
+      additionalProperties: false
+    DayAggregate:
+      type: object
+      properties:
+        day: *id004
+        topups_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9000000000000
+        expenses_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9000000000000
+      required:
+      - day
+      - topups_minor
+      - expenses_minor
+      additionalProperties: false
+    CarryDecision:
+      type: object
+      properties:
+        day: *id004
+        mode:
+          type: string
+          enum:
+          - today
+          - distribute
+        actor_id:
+          anyOf:
+          - *id001
+          - type: 'null'
+        basis_revision: *id005
+        decided_at: *id006
+      required:
+      - day
+      - mode
+      - actor_id
+      - basis_revision
+      - decided_at
+      additionalProperties: false
+    Projection:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - active
+          - completed
+        bank_minor: &id007
+          type: integer
+          format: int64
+          minimum: -9000000000000
+          maximum: 9000000000000
+        today_remaining_minor:
+          anyOf:
+          - *id007
+          - type: 'null'
+        days_remaining:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 366
+        carry_minor:
+          type: integer
+          format: int64
+          minimum: 0
+        carry_status:
+          type: string
+          enum:
+          - none
+          - pending
+          - selected_today
+          - selected_distribute
+          - auto_distribute
+        today_mode_remaining_minor:
+          anyOf:
+          - *id007
+          - type: 'null'
+        distribute_remaining_minor:
+          anyOf:
+          - *id007
+          - type: 'null'
+      required:
+      - status
+      - bank_minor
+      - today_remaining_minor
+      - days_remaining
+      - carry_minor
+      - carry_status
+      - today_mode_remaining_minor
+      - distribute_remaining_minor
+      additionalProperties: false
+    Snapshot:
+      type: object
+      properties:
+        server_time: *id006
+        business_date: *id004
+        cabinet_revision: *id005
+        cabinet:
+          $ref: '#/components/schemas/Cabinet'
+        sprint:
+          anyOf:
+          - $ref: '#/components/schemas/Sprint'
+          - type: 'null'
+        daily_totals:
+          type: array
+          items:
+            $ref: '#/components/schemas/DayAggregate'
+          maxItems: 366
+        carry_decisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CarryDecision'
+          maxItems: 366
+        projection:
+          anyOf:
+          - $ref: '#/components/schemas/Projection'
+          - type: 'null'
+        sprint_revisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SprintRevision'
+      required:
+      - server_time
+      - business_date
+      - cabinet_revision
+      - cabinet
+      - sprint
+      - daily_totals
+      - carry_decisions
+      - projection
+      - sprint_revisions
+      additionalProperties: false
+    Entry:
+      type: object
+      properties:
+        id: *id001
+        sprint_id: *id001
+        kind:
+          type: string
+          enum:
+          - expense
+          - topup
+        amount_minor: *id008
+        occurred_at: *id006
+        effective_day: *id004
+        received_at: *id006
+        author_id:
+          anyOf:
+          - *id001
+          - type: 'null'
+        last_editor_id:
+          anyOf:
+          - *id001
+          - type: 'null'
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+        deleted_at:
+          anyOf:
+          - *id006
+          - type: 'null'
+      required:
+      - id
+      - sprint_id
+      - kind
+      - amount_minor
+      - occurred_at
+      - effective_day
+      - received_at
+      - author_id
+      - last_editor_id
+      - revision
+      - deleted_at
+      additionalProperties: false
+    EntryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entry'
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+        observed_cabinet_revision: *id005
+      required:
+      - items
+      - next_cursor
+      - observed_cabinet_revision
+      additionalProperties: false
+    SprintPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sprint'
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+      required:
+      - items
+      - next_cursor
+      additionalProperties: false
+    ArchivedProjection:
+      type: object
+      properties:
+        server_time: *id006
+        cabinet_revision: *id005
+        sprint:
+          $ref: '#/components/schemas/Sprint'
+        daily_totals:
+          type: array
+          items:
+            $ref: '#/components/schemas/DayAggregate'
+        carry_decisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CarryDecision'
+        projection:
+          $ref: '#/components/schemas/Projection'
+        sprint_revisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SprintRevision'
+      required:
+      - server_time
+      - cabinet_revision
+      - sprint
+      - daily_totals
+      - carry_decisions
+      - projection
+      - sprint_revisions
+      additionalProperties: false
+    Invitation:
+      type: object
+      properties:
+        id: *id001
+        code:
+          type: string
+          pattern: ^[0-9A-HJKMNP-TV-Z]{10}$
+        expires_at: *id006
+        environment:
+          type: string
+          enum:
+          - staging
+          - production
+      required:
+      - id
+      - code
+      - expires_at
+      - environment
+      additionalProperties: false
+      description: The displayed code and QR consume the same invitation. Exactly
+        one successful membership; expires after 24 hours. QR is generated on-device
+        with environment+code; no financial data. Scanning/preview does not consume
+        the code.
+    InvitationPreview:
+      type: object
+      properties:
+        cabinet_name:
+          type: string
+        inviter_name:
+          type: string
+        available_slots:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9
+        expires_at: *id006
+        member_count:
+          type: integer
+          minimum: 1
+          maximum: 10
+      required:
+      - cabinet_name
+      - inviter_name
+      - available_slots
+      - expires_at
+      - member_count
+      additionalProperties: false
+    CommandResult:
+      type: object
+      properties:
+        command_id: *id001
+        status:
+          type: string
+          enum:
+          - applied
+        result_revision:
+          anyOf:
+          - *id005
+          - type: 'null'
+        entity_id:
+          anyOf:
+          - *id001
+          - type: 'null'
+        invitation:
+          anyOf:
+          - $ref: '#/components/schemas/Invitation'
+          - type: 'null'
+      required:
+      - command_id
+      - status
+      - result_revision
+      - entity_id
+      - invitation
+      additionalProperties: false
+    CommandReceipt:
+      type: object
+      properties:
+        command_id: *id001
+        status:
+          type: string
+          enum:
+          - applied
+          - rejected
+          - unknown
+        result_revision:
+          anyOf:
+          - *id005
+          - type: 'null'
+        result:
+          anyOf:
+          - $ref: '#/components/schemas/CommandResult'
+          - type: 'null'
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/Error'
+          - type: 'null'
+      required:
+      - command_id
+      - status
+      - result_revision
+      - result
+      - error
+      additionalProperties: false
+    SyncRequest:
+      type: object
+      properties:
+        unresolved_command_ids:
+          type: array
+          items: *id001
+          maxItems: 1000
+          uniqueItems: true
+      required:
+      - unresolved_command_ids
+      additionalProperties: false
+    SyncResponse:
+      type: object
+      properties:
+        snapshot:
+          $ref: '#/components/schemas/Snapshot'
+        receipts:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommandReceipt'
+          maxItems: 1000
+      required:
+      - snapshot
+      - receipts
+      additionalProperties: false
+    CreateCabinetRequest:
+      type: object
+      properties:
+        command_id: *id001
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        timezone:
+          type: string
+          default: Asia/Shanghai
+      required:
+      - command_id
+      - name
+      - timezone
+      additionalProperties: false
+    CabinetResult:
+      type: object
+      properties:
+        command_id: *id001
+        cabinet_id: *id001
+      required:
+      - command_id
+      - cabinet_id
+      additionalProperties: false
+    InvitationCode:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 10
+          maxLength: 10
+      required:
+      - code
+      additionalProperties: false
+    AcceptInvitation:
+      type: object
+      properties:
+        command_id: *id001
+        code:
+          type: string
+          minLength: 10
+          maxLength: 10
+      required:
+      - command_id
+      - code
+      additionalProperties: false
+    Challenge:
+      type: object
+      properties:
+        challenge_id: *id001
+        raw_nonce:
+          type: string
+        expires_at: *id006
+      required:
+      - challenge_id
+      - raw_nonce
+      - expires_at
+      additionalProperties: false
+    AppleLogin:
+      type: object
+      properties:
+        challenge_id: *id001
+        id_token:
+          type: string
+        authorization_code:
+          type: string
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 40
+      required:
+      - challenge_id
+      - id_token
+      - authorization_code
+      additionalProperties: false
+    SessionTokens:
+      type: object
+      properties:
+        access_token:
+          type: string
+        access_expires_at: *id006
+        refresh_token:
+          type: string
+        refresh_expires_at: *id006
+      required:
+      - access_token
+      - access_expires_at
+      - refresh_token
+      - refresh_expires_at
+      additionalProperties: false
+    LoginResult:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          $ref: '#/components/schemas/SessionTokens'
+        reauth_token:
+          type: string
+        reauth_expires_at: *id006
+      required:
+      - user
+      - session
+      - reauth_token
+      - reauth_expires_at
+      additionalProperties: false
+    RefreshRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+        refresh_request_id: *id001
+      required:
+      - refresh_token
+      - refresh_request_id
+      additionalProperties: false
+    SignedAppleNotification:
+      type: object
+      properties:
+        signedPayload:
+          type: string
+      required:
+      - signedPayload
+      additionalProperties: false
+    ProfilePatch:
+      type: object
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 40
+      required:
+      - display_name
+      additionalProperties: false
+    DeleteAccountRequest:
+      type: object
+      properties:
+        command_id: *id001
+        confirm_shared_history_changes: *id009
+      required:
+      - command_id
+      - confirm_shared_history_changes
+      additionalProperties: false
+      description: Account deletion API is in scope, but shared-ledger erasure versus
+        verified anonymization must be finalized at M0 and recorded before production.
+        Never conflate leave_cabinet with deletion, silently erase shared bank, or
+        claim SET NULL alone is anonymization.
+    DeletionAccepted:
+      type: object
+      properties:
+        job_id: *id001
+        status:
+          type: string
+          enum:
+          - accepted
+        primary_deletion_deadline: *id006
+        backup_retention_days:
+          type: integer
+          format: int64
+          maximum: 30
+          minimum: 0
+      required:
+      - job_id
+      - status
+      - primary_deletion_deadline
+      - backup_retention_days
+      additionalProperties: false
+    DeviceRegistration:
+      type: object
+      properties:
+        device_id: *id001
+        app_apns_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+        widget_push_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+        apns_environment:
+          type: string
+          enum:
+          - sandbox
+          - production
+        app_version:
+          type: string
+        os_version:
+          type: string
+      required:
+      - device_id
+      - app_apns_token
+      - widget_push_token
+      - apns_environment
+      - app_version
+      - os_version
+      additionalProperties: false
+    WidgetToken:
+      type: object
+      properties:
+        token:
+          type: string
+        expires_at: *id006
+      required:
+      - token
+      - expires_at
+      additionalProperties: false
+    WidgetSnapshot:
+      type: object
+      properties:
+        server_time: *id006
+        business_date: *id004
+        cabinet_revision: *id005
+        calculation_version:
+          type: integer
+          format: int64
+          const: 2
+        status:
+          type: string
+          enum:
+          - no_sprint
+          - active
+          - completed
+        today_remaining_minor:
+          anyOf:
+          - *id007
+          - type: 'null'
+        bank_minor:
+          anyOf:
+          - *id007
+          - type: 'null'
+        carry_pending: *id009
+      required:
+      - server_time
+      - business_date
+      - cabinet_revision
+      - calculation_version
+      - status
+      - today_remaining_minor
+      - bank_minor
+      - carry_pending
+      additionalProperties: false
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - unavailable
+        version:
+          type: string
+      required:
+      - status
+      - version
+      additionalProperties: false
+    CreateSprintCommand:
+      type: object
+      properties:
+        command_id: *id001
+        type:
+          type: string
+          const: create_sprint
+        payload:
+          type: object
+          properties:
+            sprint_id: *id001
+            initial_minor: *id008
+            end_date: *id004
+            expected_cabinet_revision: *id005
+          required:
+          - sprint_id
+          - initial_minor
+          - end_date
+          - expected_cabinet_revision
+          additionalProperties: false
+      required:
+      - command_id
+      - type
+      - payload
+      additionalProperties: false
+    AddEntryCommand:
+      type: object
+      properties:
+        command_id: *id001
+        type:
+          type: string
+          const: add_entry
+        payload:
+          type: object
+          properties:
+            entry_id: *id001
+            sprint_id: *id001
+            kind:
+              type: string
+              enum:
+              - expense
+              - topup
+            amount_minor: *id008
+            occurred_at: *id006
+            allow_completed:
+              type: boolean
+              default: false
+          required:
+          - entry_id
+          - sprint_id
+          - kind
+          - amount_minor
+          - occurred_at
+          - allow_completed
+          additionalProperties: false
+      required:
+      - command_id
+      - type
+      - payload
+      additionalProperties: false
+    CorrectEntryCommand:
+      type: object
+      properties:
+        command_id: *id001
+        type:
+          type: string
+          const: correct_entry
+        payload:
+          type: object
+          properties:
+            entry_id: *id001
+            sprint_id: *id001
+            kind:
+              type: string
+              enum:
+              - expense
+              - topup
+            amount_minor: *id008
+            expected_entry_revision:
+              type: integer
+              format: int64
+              minimum: 1
+            allow_completed:
+              type: boolean
+              default: false
+          required:
+          - entry_id
+          - sprint_id
+          - kind
+          - amount_minor
+          - expected_entry_revision
+          - allow_completed
+          additionalProperties: false
+      required:
+      - command_id
+      - type
+      - payload
+      additionalProperties: false
+    VoidEntryCommand:
+      type: object
+      properties:
+        command_id: *id001
+        type:
+          type: string
+          const: void_entry
+        payload:
+          type: object
+          properties:
+            entry_id: *id001
+            sprint_id: *id001
+            expected_entry_revision:
+              type: integer
+              format: int64
+              minimum: 1
+            allow_completed:
+              type: boolean
+              default: false
+          required:
+          - entry_id
+          - sprint_id
+          - expected_entry_revision
+          - allow_completed
+          additionalProperties: false
+      required:
+      - command_id
+      - type
+      - payload
+      additionalProperties: false
+    ChooseCarryCommand:
+      type: object
+      properties:
+        command_id: *id001
+        type:
+          type: string
+          const: choose_carry
+        payload:
+          type: object
+          properties:
+            sprint_id: *id001
+            day: *id004
+            mode:
+              type: string
+              enum:
+              - today
+              - distribute
+            expected_cabinet_revision: *id005
+          required:
+          - sprint_id
+          - day
+          - mode
+          - expected_cabinet_revision
+          additionalProperties: false
+      required:
+      - command_id
+      - type
+      - payload
+      additionalProperties: false
+    CreateInvitationCommand:
+      type: object
+      properties:
+        command_id: *id001
+        type:
+          type: string
+          const: create_invitation
+        payload:
+          type: object
+          properties: {}
+          required: []
+          additionalProperties: false
+      required:
+      - command_id
+      - type
+      - payload
+      additionalProperties: false
+    RevokeInvitationCommand:
+      type: object
+      properties:
+        command_id: *id001
+        type:
+          type: string
+          const: revoke_invitation
+        payload:
+          type: object
+          properties:
+            invitation_id: *id001
+          required:
+          - invitation_id
+          additionalProperties: false
+      required:
+      - command_id
+      - type
+      - payload
+      additionalProperties: false
+    RenameCabinetCommand:
+      type: object
+      properties:
+        command_id: *id001
+        type:
+          type: string
+          const: rename_cabinet
+        payload:
+          type: object
+          properties:
+            name:
+              type: string
+              minLength: 1
+              maxLength: 40
+          required:
+          - name
+          additionalProperties: false
+      required:
+      - command_id
+      - type
+      - payload
+      additionalProperties: false
+    LeaveCabinetCommand:
+      type: object
+      properties:
+        command_id: *id001
+        type:
+          type: string
+          const: leave_cabinet
+        payload:
+          type: object
+          properties:
+            expected_cabinet_revision: *id005
+          required:
+          - expected_cabinet_revision
+          additionalProperties: false
+      required:
+      - command_id
+      - type
+      - payload
+      additionalProperties: false
+    Command:
+      oneOf:
+      - $ref: '#/components/schemas/CreateSprintCommand'
+      - $ref: '#/components/schemas/AddEntryCommand'
+      - $ref: '#/components/schemas/CorrectEntryCommand'
+      - $ref: '#/components/schemas/VoidEntryCommand'
+      - $ref: '#/components/schemas/ChooseCarryCommand'
+      - $ref: '#/components/schemas/CreateInvitationCommand'
+      - $ref: '#/components/schemas/RevokeInvitationCommand'
+      - $ref: '#/components/schemas/RenameCabinetCommand'
+      - $ref: '#/components/schemas/LeaveCabinetCommand'
+      - $ref: '#/components/schemas/UpdateSprintCommand'
+      discriminator:
+        propertyName: type
+        mapping:
+          create_sprint: '#/components/schemas/CreateSprintCommand'
+          add_entry: '#/components/schemas/AddEntryCommand'
+          correct_entry: '#/components/schemas/CorrectEntryCommand'
+          void_entry: '#/components/schemas/VoidEntryCommand'
+          choose_carry: '#/components/schemas/ChooseCarryCommand'
+          create_invitation: '#/components/schemas/CreateInvitationCommand'
+          revoke_invitation: '#/components/schemas/RevokeInvitationCommand'
+          rename_cabinet: '#/components/schemas/RenameCabinetCommand'
+          leave_cabinet: '#/components/schemas/LeaveCabinetCommand'
+          update_sprint: '#/components/schemas/UpdateSprintCommand'
+    SprintRevision:
+      type: object
+      additionalProperties: false
+      properties:
+        id: &id010
+          type: string
+          format: uuid
+        sprint_id: *id010
+        sequence:
+          type: integer
+          minimum: 1
+        effective_day: &id012
+          type: string
+          format: date
+        bank_adjustment_minor: &id011
+          type: integer
+          format: int64
+          minimum: -9000000000000
+          maximum: 9000000000000
+        bank_before_minor: *id011
+        bank_after_minor: *id011
+        end_date_before: *id012
+        end_date_after: *id012
+        basis_revision:
+          type: integer
+          minimum: 0
+        actor_id:
+          anyOf:
+          - *id010
+          - type: 'null'
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - sprint_id
+      - sequence
+      - effective_day
+      - bank_adjustment_minor
+      - bank_before_minor
+      - bank_after_minor
+      - end_date_before
+      - end_date_after
+      - basis_revision
+      - actor_id
+      - created_at
+      description: Immutable accepted configuration change. Delta is computed once
+        against the locked confirmed bank. It is not recomputed when a late expense
+        arrives. Latest sequence on a day defines its end date. Arithmetic uses initial_end_date
+        plus these changes, not current end_date for all historical days.
+    UpdateSprintCommand:
+      type: object
+      additionalProperties: false
+      properties:
+        command_id: *id010
+        type:
+          type: string
+          const: update_sprint
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            sprint_id: *id010
+            expected_cabinet_revision:
+              type: integer
+              minimum: 0
+            expected_business_date: *id012
+            bank_minor: *id011
+            end_date: *id012
+          required:
+          - sprint_id
+          - expected_cabinet_revision
+          - expected_business_date
+          anyOf:
+          - required:
+            - bank_minor
+          - required:
+            - end_date
+          description: Only dirty fields. bank_minor means desired CURRENT confirmed
+            bank, never initial budget. Server computes delta atomically. Mismatch
+            of revision/date -> 409 with refreshed preview, no write. Date >= current
+            business date and <= start+365. Same values -> successful no-op receipt,
+            no ledger change.
+      required:
+      - command_id
+      - type
+      - payload
