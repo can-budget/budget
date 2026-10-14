@@ -1,4 +1,4 @@
-# Implementation verification — 2026-10-13
+# Implementation verification — 2026-10-14
 
 This report describes the current working checkout, not a deployed release.
 The owner's current scope is personal/family use with one production server.
@@ -25,6 +25,9 @@ installation and physical-device checks until the implementation is ready.
   backup before migration, check container/public HTTPS health and preserve
   failure state without an automatic SQL rollback. GitHub/VPS activation is
   documented in `infra/CI_CD.md`; no remote workflow has run in this session.
+- Reviewed Ubuntu host-preparation helper for backup tools, deployment accounts,
+  directory ownership and the root-owned release receiver. It preserves existing
+  compatible accounts and does not create runtime credentials or start the app.
 
 The original calculation rules and source handoff remain unchanged. The active
 transport contract is in `contracts/openapi.yaml`; clarifications are documented
@@ -32,7 +35,9 @@ in `contracts/README.md`.
 
 ## Executed checks
 
-Final `make verify` completed successfully in this Linux environment:
+`make verify` completed successfully at `9d16c5d` in this Linux environment.
+After the existing-account compatibility fix in `b76ae3f`, `make infra-test`
+and `make infra-check` passed again; the table includes those latest results:
 
 | Check | Observed result |
 | --- | --- |
@@ -42,10 +47,10 @@ Final `make verify` completed successfully in this Linux environment:
 | Original calculation suite | 7 methods PASS, including 240 golden cases and randomized invariants |
 | Original contract verifier | PASS, 48 schemas / 246 references / 23 operations |
 | Active implementation contract | PASS, 50 schemas / 267 references / 25 operations |
-| Infrastructure static checks | PASS, 2 Compose files, CI/CD policy, 7 shell scripts and infrastructure Python syntax |
-| Infrastructure unit tests | 111 PASS: 35 journal protocol tests, 51 deployment safety tests and 25 transport/head-gate tests; all use temporary state and controlled transports |
+| Infrastructure static checks | PASS, 2 Compose files, CI/CD policy, 8 shell scripts and infrastructure Python syntax |
+| Infrastructure unit tests | 125 PASS: 35 journal protocol tests, 51 deployment safety tests, 25 transport/head-gate tests and 14 host-preparation tests; all use temporary state and controlled commands/transports |
 | iOS project static checks | PASS, 3 targets, scheme, entitlements, icon and fixture identity; 25 XCTest methods registered |
-| Recognizable credential-pattern check | PASS, 106 authored text files; this is a bounded pattern check, not proof that arbitrary secrets are absent |
+| Recognizable credential-pattern check | PASS, 108 authored text files; this is a bounded pattern check, not proof that arbitrary secrets are absent |
 
 The Python suite emits one Starlette TestClient deprecation warning about its
 httpx adapter. It does not affect the recorded test result.
@@ -58,9 +63,10 @@ Additional executed checks:
   final constant-query pass. No database connection or migration was executed.
 - The credential checker rejected a synthetic token in a temporary fixture and
   did not include its value in the error output.
-- `git diff --cached --check` passed for the local commit groups. Implementation
-  and CI/CD tooling are committed through `5283203`; the following
-  documentation commit records this report. No release build has been produced.
+- Git whitespace checks passed for the local commit groups. Implementation,
+  CI/CD tooling and host preparation are committed through `b76ae3f`; the
+  following documentation commit records this report. No release build has
+  been produced.
 - Earlier in this implementation, an in-process `/health/live` check and Python
   calculation AST comparison passed. Swift calculation/fixture byte identity
   is also checked by the current project verifier.
@@ -70,27 +76,61 @@ interoperability test invokes the real backend and host-tool protocol functions;
 it does not perform a real off-host transfer. SQL parsing does not establish
 transaction or migration correctness on a running database.
 
+## Observed VPS preparation
+
+On 2026-10-14 the owner-enabled bound SSH target `budget` accepted commands with
+its pinned identity. The VPS reports Ubuntu 24.04.5 LTS, Linux amd64, 2 CPUs,
+1.8 GiB usable RAM, a 58 GiB system disk and no swap. Docker 29.9.0 and Compose
+5.6.0 were already installed. Capacity under application load is not measured.
+
+The reviewed helper at `b76ae3f` completed as a remote systemd job with
+`Result=success`, `ExecMainStatus=0`, `ActiveState=active`, `SubState=exited`.
+Independent read-only checks confirmed:
+
+- Installed `age` 1.1.1-1ubuntu0.24.04.3 and `rclone`
+  1.60.1+dfsg-3ubuntu0.24.04.6 from Ubuntu packages.
+- Preserved existing `can-operator` UID/GID 1000, home and `/bin/sh`; Docker
+  and `can-runtime` supplementary membership verified, runtime GID 10001.
+- All 15 managed directory ownership/mode checks passed. The root-owned
+  installed receiver's SHA256 matches the reviewed Git source.
+- Docker and Compose commands work as `can-operator`.
+
+An earlier preflight at `9d16c5d` refused the existing POSIX shell before package
+or account changes. The compatibility fix accepts `/bin/sh` and `/bin/bash` and
+has regression coverage. No existing SSH key, shell or password was replaced.
+Production `runtime.conf` and the `current` release link remain absent; host
+preparation is not application deployment.
+
 ## Not yet verified
 
 - PostgreSQL migration execution and all 18 database integration cases:
   `make test-postgres` requires an explicitly selected disposable database.
 - Docker image build and actual Compose startup, DNS/TLS and production health.
-- GitHub environment/branch rules, GHCR publication, dedicated SSH credentials,
-  server bootstrap and a real main-to-production workflow run. The deploy tests
-  use fake commands and temporary files, not a production Docker daemon.
+- GitHub environment/branch rules, GHCR publication, dedicated CI SSH credentials,
+  application bootstrap and a real main-to-production workflow run. The deploy
+  tests use fake commands and temporary files, not a production Docker daemon.
 - Swift compilation, the 25 XCTest methods, simulator behavior and two-phone
   offline/shared-budget acceptance. Run `make ios-build` and `make ios-test`
   with the Xcode/SDK described in `apps/ios/README.md`.
 - Owner Apple membership, identifiers, signing, Apple login, APNs and TestFlight.
 - A real encrypted backup/off-host transfer and isolated restore rehearsal.
 
-No remote push, deployment, live migration or TestFlight upload was performed.
-The bound Git broker reports no company Git mapping. Owner infrastructure and
-Apple connections have not been made available to this task.
-The owner's publication request was handled by creating local commits on
-`agent/mvp-a31260f0`. Remote publication remains blocked by the missing HQ Git
-connection; this managed environment does not permit a direct default-branch
-push or merge. No remote URL or credential configuration was substituted.
+No remote push, application deployment, live migration or TestFlight upload was
+performed. The GitHub connection now exists and permits task-branch push and
+draft PR creation, but prohibits direct `main` push/merge. Its allowed prefixes
+also exclude the requested remote `dev` branch; `dev` exists only locally.
+
+Publication of `agent/mvp-a31260f0` is blocked by the HQ CLI transport: `git.push`
+requires a complete `bundleBase64` in a single JSON argument. The attempted
+630,816-byte Git bundle produced an 841,140-byte argument; Linux rejected process
+creation with `Argument list too long`. This CLI accepts neither stdin nor a
+file reference for JSON. It needs supported file/stdin input or a scoped bundle
+upload facility. The upload never reached GitHub. No direct remote, credential
+extraction or alternate authenticated publishing route was substituted.
+
+The production domain, Apple settings/keys, independent backup destination,
+registry pull credential and dedicated CI key still require owner provisioning
+through an approved secure path. Server access alone does not configure these.
 
 ## Account deletion: implemented decision and boundaries
 

@@ -1,6 +1,6 @@
 # Release acceptance record
 
-Prepared on 2026-10-13. This is a run sheet, not signed acceptance.
+Updated on 2026-10-14. This is a run sheet, not signed acceptance.
 The owner has deferred release, installation and physical-device verification
 until implementation is ready. Local evidence is recorded separately in
 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
@@ -17,10 +17,10 @@ personal/financial data in this document.
 
 | Field | Actual value |
 | --- | --- |
-| Source commit | Implementation and tooling: `5283203ae7cc395f3d7b65be014a9cb44b227894`; replace with the exact release commit when executing this record |
+| Source commit | Implementation, CI/CD and host preparation through `b76ae3f`; replace with the exact release commit when executing this record |
 | App version / build / archive | NOT RUN |
 | API image digest / migration revision | NOT DEPLOYED |
-| Environment / HTTPS origin | NOT CONNECTED |
+| Environment / HTTPS origin | VPS access and host prerequisites verified; application / HTTPS NOT DEPLOYED |
 | Apple signing team / entitlement review | NOT VERIFIED |
 | Device A model / iOS | NOT PROVIDED |
 | Device B model / iOS | NOT PROVIDED |

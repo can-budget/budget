@@ -2,9 +2,11 @@
 
 This is an implemented pipeline and an activation runbook. On 2026-10-14 the
 bound GitHub connection and owner-enabled SSH target became available. Server
-access and Docker were checked successfully; a working application deployment
-and production migration have not yet been verified. The setup below is still
-required. iOS delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
+access, Docker and the reviewed host-preparation helper were verified successfully.
+GitHub publication is blocked by the broker CLI's large-JSON argument limit; no
+workflow or application deployment has run. Actual evidence and remaining setup
+are recorded in [IMPLEMENTATION_STATUS.md](../docs/IMPLEMENTATION_STATUS.md).
+iOS delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
 
 ## Branches and normal releases
 
@@ -29,6 +31,13 @@ Protect `main` against force pushes and require the `backend`, `postgres` and
 The repository's Actions policy must allow its pinned checkout/setup-python
 actions and GHCR publishing. Branch rules, remote `dev` creation, and environment
 configuration have not been applied by this task.
+
+The current HQ connection permits task branches under `agent/`, `work/`,
+`feature/`, `fix/` and `chore/`, plus draft PRs targeting `main`. It does not
+permit direct `main` push/merge or creation of remote `dev`. The owner must create
+`dev` through GitHub or explicitly enable that branch in the connection policy;
+the existing local `dev` is not evidence of a remote branch. Publishing the
+prepared task branch also awaits a supported large-payload broker input path.
 
 ## GitHub configuration
 
@@ -58,9 +67,9 @@ The deploy job has only `contents: read`; no registry write credential is sent
 to the server. The image is associated with `can-budget/budget` through its OCI
 source label. Keep package visibility private and allow this repository to publish
 the package. For an already existing package, check its Actions access explicitly.
-`can-budget/budget` and `ghcr.io/can-budget/budget-api` are the configured targets
-from the owner's project details, not verified evidence that the external
-repository/package connection currently exists.
+The bound connection confirms `can-budget/budget` as the repository target.
+`ghcr.io/can-budget/budget-api` is the configured image destination; package
+existence, visibility and Actions access have not yet been verified.
 
 For server pulls, configure a separate owner-managed GHCR credential with package
 read permission (`read:packages` PAT classic) and access to this private package.
@@ -75,8 +84,8 @@ registry token independently.
 
 Confirm Ubuntu/Linux amd64, host Python 3.11+ at `/usr/bin/python3`/`python3`,
 `curl`, public IP, DNS, Docker Engine/Compose, clock, disk and
-outbound GHCR/Apple/backup access. The intended small VPS is 2 vCPU / 2 GiB RAM;
-actual capacity and runtime behavior have not been measured. Builds run in GitHub
+outbound GHCR/Apple/backup access. The inspected VPS has 2 vCPU, 1.8 GiB usable
+RAM and a 58 GiB system disk; application capacity has not been measured. Builds run in GitHub
 to avoid putting compiler/package-install load on the small production VPS.
 
 Follow [production operations](README.md) for credentials, PostgreSQL bootstrap,
@@ -112,6 +121,13 @@ the operator's Docker credential store. It does not write credentials,
 start production containers. Through the HQ SSH broker, run long package
 installation as a remote job and inspect its exit status separately; a successful
 job launch alone does not establish completed preparation.
+
+On 2026-10-14 this helper at `b76ae3f` completed successfully on the bound VPS.
+Independent checks verified the backup executables, existing operator account,
+runtime group, directory permissions and installed receiver digest. The existing
+operator uses `/bin/sh`, which is supported without changing its shell. Runtime
+configuration, credentials, CI authorized key and application bootstrap remain
+separate activation steps.
 
 Install the reviewed receiver once from this repository:
 
@@ -152,8 +168,14 @@ git archive --format=tar REVIEWED_SOURCE_SHA infra > /tmp/can-infra.tar
 ```
 
 The owner extracts those reviewed files under
-`/opt/can/releases/REVIEWED_SOURCE_SHA`, configures `current` to that directory and
-uses `CAN_RELEASE=REVIEWED_SOURCE_SHA` plus `CAN_IMAGE=ghcr.io/can-budget/budget-api@sha256:REVIEWED_DIGEST`.
+`/opt/can/releases/REVIEWED_SOURCE_SHA`. Normalize that release's regular files to
+mode `0644`, internal directories to `0755`, and its root directory to `0700`
+owned by `can-operator`. Do not rely on archive modes or the extraction umask:
+Git archives can contain group-writable files rejected by the deployer's trust
+checks, while private inner directories prevent container bind-mount access.
+The automatic receiver performs this normalization for subsequent releases.
+Configure `current` to that directory and use `CAN_RELEASE=REVIEWED_SOURCE_SHA`
+plus `CAN_IMAGE=ghcr.io/can-budget/budget-api@sha256:REVIEWED_DIGEST`.
 Pull the image; perform the explicit first database startup/migration and journal
 setup from [README.md](README.md), then verify API/worker/Caddy and HTTPS. Use
 `--no-build` with the prebuilt image; an infra-only bundle intentionally contains
