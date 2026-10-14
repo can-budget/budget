@@ -10,7 +10,7 @@ fail() {
 }
 
 check_accounts() {
-    local runtime by_gid operator primary docker_group
+    local runtime by_gid operator primary docker_group operator_shell
     runtime="$(getent group can-runtime || true)"
     by_gid="$(getent group 10001 || true)"
     [[ -z "$runtime" || "$(cut -d: -f3 <<<"$runtime")" == 10001 ]] ||
@@ -21,9 +21,10 @@ check_accounts() {
     [[ -n "$docker_group" ]] || fail 'The existing Docker installation must provide its docker group.'
     operator="$(getent passwd can-operator || true)"
     if [[ -n "$operator" ]]; then
+        operator_shell="$(cut -d: -f7 <<<"$operator")"
         [[ "$(cut -d: -f3 <<<"$operator")" != 0 &&
             "$(cut -d: -f6 <<<"$operator")" == /home/can-operator &&
-            "$(cut -d: -f7 <<<"$operator")" == /bin/bash ]] ||
+            ( "$operator_shell" == /bin/bash || "$operator_shell" == /bin/sh ) ]] ||
             fail 'Existing can-operator UID, home or shell needs owner review.'
         primary="$(getent group can-operator || true)"
         [[ -n "$primary" && "$(cut -d: -f3 <<<"$primary")" == "$(cut -d: -f4 <<<"$operator")" ]] ||

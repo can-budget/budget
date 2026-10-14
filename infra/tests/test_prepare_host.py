@@ -20,7 +20,7 @@ getent() {
             printf '%s\n' 'can-operator:x:1000:' ;;
         'passwd can-operator')
             [[ -f "$CASE_DIR/user" ]] || return 2
-            printf '%s\n' 'can-operator:x:1000:1000::/home/can-operator:/bin/bash' ;;
+            printf 'can-operator:x:1000:1000::/home/can-operator:%s\n' "${CASE_OPERATOR_SHELL:-/bin/bash}" ;;
         *) return 2 ;;
     esac
 }
@@ -115,6 +115,24 @@ def test_apt_failure_stops_before_account_or_directory_changes(tmp_path):
     )
     assert result.returncode == 100
     assert calls(tmp_path) == ["apt-get -o DPkg::Lock::Timeout=60 update"]
+
+
+@pytest.mark.parametrize("shell", ["/bin/sh", "/bin/bash"])
+def test_existing_operator_shell_is_reused_without_account_or_password_changes(tmp_path, shell):
+    for fixture in ("user", "group", "packages"):
+        (tmp_path / fixture).touch()
+    result = run_script(
+        tmp_path,
+        f"CASE_OPERATOR_SHELL={shell}; preflight() {{ check_accounts; }}; main /reviewed/receive-release.py",
+    )
+    assert result.returncode == 0, result.stderr
+    commands = calls(tmp_path)
+    assert "groupadd --gid 10001 can-runtime" in commands
+    assert "usermod --append --groups docker,can-runtime can-operator" in commands
+    assert not any(line.startswith("useradd ") for line in commands)
+    assert not any(
+        "--shell" in line or "--password" in line or "passwd " in line for line in commands
+    )
 
 
 @pytest.mark.parametrize(
