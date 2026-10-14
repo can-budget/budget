@@ -3,8 +3,9 @@
 This is an implemented pipeline and an activation runbook. On 2026-10-14 the
 bound GitHub connection and owner-enabled SSH target became available. Server
 access, Docker and the reviewed host-preparation helper were verified successfully.
-GitHub publication is blocked by the broker CLI's large-JSON argument limit; no
-workflow or application deployment has run. Actual evidence and remaining setup
+The task branch was published through the updated broker's `--json-file` input.
+PR creation returned HTTP 422; remote workflow results remain unverified and the
+application is not deployed. Actual evidence and remaining setup
 are recorded in [IMPLEMENTATION_STATUS.md](../docs/IMPLEMENTATION_STATUS.md).
 iOS delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
 
@@ -36,8 +37,10 @@ The current HQ connection permits task branches under `agent/`, `work/`,
 `feature/`, `fix/` and `chore/`, plus draft PRs targeting `main`. It does not
 permit direct `main` push/merge or creation of remote `dev`. The owner must create
 `dev` through GitHub or explicitly enable that branch in the connection policy;
-the existing local `dev` is not evidence of a remote branch. Publishing the
-prepared task branch also awaits a supported large-payload broker input path.
+the existing local `dev` is not evidence of a remote branch. The prepared task
+branch `agent/mvp-a31260f0` has been published. Use `hq runner broker git.push
+--json-file /tmp/request.json` for a serialized bundle request; positional base64
+can exceed the operating system's per-argument limit.
 
 ## GitHub configuration
 

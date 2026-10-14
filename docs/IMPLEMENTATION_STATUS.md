@@ -24,7 +24,7 @@ installation and physical-device checks until the implementation is ready.
   The receiver/deployer validate source, serialize releases, verify off-host
   backup before migration, check container/public HTTPS health and preserve
   failure state without an automatic SQL rollback. GitHub/VPS activation is
-  documented in `infra/CI_CD.md`; no remote workflow has run in this session.
+  documented in `infra/CI_CD.md`; remote workflow results remain unverified.
 - Reviewed Ubuntu host-preparation helper for backup tools, deployment accounts,
   directory ownership and the root-owned release receiver. It preserves existing
   compatible accounts and does not create runtime credentials or start the app.
@@ -115,18 +115,24 @@ preparation is not application deployment.
 - Owner Apple membership, identifiers, signing, Apple login, APNs and TestFlight.
 - A real encrypted backup/off-host transfer and isolated restore rehearsal.
 
-No remote push, application deployment, live migration or TestFlight upload was
-performed. The GitHub connection now exists and permits task-branch push and
-draft PR creation, but prohibits direct `main` push/merge. Its allowed prefixes
-also exclude the requested remote `dev` branch; `dev` exists only locally.
+The bound broker successfully published `agent/mvp-a31260f0` through `619023f`
+on 2026-10-14 (`published: true`). Its updated `--json-file` interface accepted
+the 846,236-byte JSON request containing a complete Git bundle. This resolves
+the earlier positional-argument `Argument list too long` failure. Large broker
+requests must use a JSON file or stdin through `--json-file`, never a base64
+bundle in a command argument.
 
-Publication of `agent/mvp-a31260f0` is blocked by the HQ CLI transport: `git.push`
-requires a complete `bundleBase64` in a single JSON argument. The attempted
-630,816-byte Git bundle produced an 841,140-byte argument; Linux rejected process
-creation with `Argument list too long`. This CLI accepts neither stdin nor a
-file reference for JSON. It needs supported file/stdin input or a scoped bundle
-upload facility. The upload never reached GitHub. No direct remote, credential
-extraction or alternate authenticated publishing route was substituted.
+The draft PR request returned `hosting request returned HTTP 422` without the
+underlying hosting response. No PR URL or successful PR creation was confirmed.
+The available bound operations did not expose Actions status; remote test runs
+and their conclusions remain unknown. Check the repository's Actions view and
+the published branch before merging. No direct remote or credential extraction
+was used.
+
+The connection permits task-branch push and draft PR creation, but prohibits
+direct `main` push/merge. Its allowed prefixes also exclude the requested remote
+`dev` branch; `dev` exists only locally. No application deployment, live migration
+or TestFlight upload was performed.
 
 The production domain, Apple settings/keys, independent backup destination,
 registry pull credential and dedicated CI key still require owner provisioning
