@@ -1,10 +1,10 @@
 # Backend delivery from main
 
-This is an implemented pipeline and an activation runbook. No remote workflow,
-SSH connection, deployment or production migration has been executed by this
-task. HQ currently reports `repository has no company Git mapping`; the task
-also has no SSH/production administration connector. Owner-side setup below is
-still required. iOS delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
+This is an implemented pipeline and an activation runbook. On 2026-10-14 the
+bound GitHub connection and owner-enabled SSH target became available. Server
+access and Docker were checked successfully; a working application deployment
+and production migration have not yet been verified. The setup below is still
+required. iOS delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
 
 ## Branches and normal releases
 
@@ -95,6 +95,23 @@ Have the owner provision:
 Use the same `can-operator` / Docker / `can-runtime` account/group arrangement as
 the backup runbook. Docker group membership grants host-level authority; the
 restricted SSH command does not turn arbitrary reviewed main code into a sandbox.
+
+For Ubuntu 24.04 amd64 with Docker already installed, the owner-authorized
+preparation helper performs these account/directory steps and installs missing
+`age`/`rclone` packages. Supply a reviewed root-owned receiver file under a
+root-owned directory, with no group/other writes:
+
+```sh
+sudo bash infra/scripts/prepare-host.sh /absolute/reviewed/receive-release.py
+```
+
+The helper checks conflicting accounts/GID before installation, preserves
+supplementary groups, and can be rerun. It also prepares `/etc/can/registry` for
+the operator's Docker credential store. It does not write credentials,
+`runtime.conf`, `authorized_keys`, or `current`, and does not enable timers or
+start production containers. Through the HQ SSH broker, run long package
+installation as a remote job and inspect its exit status separately; a successful
+job launch alone does not establish completed preparation.
 
 Install the reviewed receiver once from this repository:
 

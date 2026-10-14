@@ -25,7 +25,9 @@ without restricting `--forwarded-allow-ips` to an explicit trusted proxy address
 Prerequisites: an owner-controlled Linux server with host Python 3.11+ available
 as `/usr/bin/python3`/`python3`, `curl`, Docker Engine and Compose v2,
 DNS pointing to it, inbound 80/443, outbound Apple/ACME access, synchronized clock
-and disk monitoring. No package here provisions a server or firewall.
+and disk monitoring. The explicit `scripts/prepare-host.sh` helper prepares
+Ubuntu 24.04 host prerequisites; Docker, firewall and SSH settings remain
+owner-managed. It creates no production configuration or running application.
 
 Set these **non-secret** variables through the operator's service manager or
 interactive environment, without storing them in tracked files:
