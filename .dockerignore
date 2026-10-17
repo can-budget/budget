@@ -1,0 +1,17 @@
+# Production builds receive only the API package and migration sources.
+**
+!.dockerignore
+!infra/
+!infra/Dockerfile
+!services/
+!services/api/
+!services/api/pyproject.toml
+!services/api/requirements.lock
+!services/api/can_api/
+!services/api/can_api/*.py
+!services/api/alembic.ini
+!services/api/alembic/
+!services/api/alembic/env.py
+!services/api/alembic/versions/
+!services/api/alembic/versions/*.py
+!services/api/alembic/versions/initial_schema.sql

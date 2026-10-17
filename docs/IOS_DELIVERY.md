@@ -75,4 +75,4 @@ Apple Developer Program включает 25 compute hours Xcode Cloud в мес�
 
 Выполнены чтение конфигурации и CI репозитория, сверка правил по официальным источникам Apple, проверка локальных ссылок этого документа. Ранее прошла статическая проверка проекта; актуальный общий отчёт — [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 
-**NOT RUN:** Swift/Xcode build и XCTest, владельческая подпись и реальные даты профилей, Apple login/APNs, архивирование/экспорт, TestFlight upload/review, Ad Hoc установка, Xcode Cloud и двухтелефонная приёмка. Оплаченный аккаунт указан владельцем, но доступ и его состояние этой задачей не проверялись.
+**NOT RUN:** Swift/Xcode build и XCTest, владельческая подпись и реальные даты профилей, Apple login/APNs, архивирование/экспорт, TestFlight upload/review, Ad Hoc установка, Xcode Cloud и двухтелефонная приёмка. 17 октября 2026 года владелец подтвердил наличие только обычного Apple ID; платное членство Apple Developer Program пока не оформлено. Реальные Sign in with Apple/APNs credentials и подпись ещё не настроены.

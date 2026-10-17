@@ -46,9 +46,17 @@ can exceed the operating system's per-argument limit.
 
 Create an environment named `production`, restricted to branch `main`. To retain
 the requested automatic deployment, do not add a required manual reviewer to
-that environment. Verify feature availability for the owner's private repository
-plan; if environment protection rules are unavailable, the workflow conditions
-still apply, but the missing account-side restriction must be recorded.
+that environment. The owner must verify the organization's GitHub plan before
+activation: this private organization repository requires GitHub Team or
+Enterprise for environments, environment secrets/variables and deployment-branch
+restrictions. GitHub Free does not provide these features for private repositories;
+a personal Pro subscription does not enable them for an organization's repository.
+See [GitHub's environment availability requirements](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+
+Keep the workflow's `production` environment requirement until availability is
+confirmed. Workflow conditions alone do not replace environment configuration.
+A repository-secrets alternative without an environment would require a separate
+review of secret access and branch restrictions; it is not implemented here.
 
 | Environment setting | Type | Value / purpose |
 | --- | --- | --- |
