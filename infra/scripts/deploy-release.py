@@ -11,6 +11,7 @@ import argparse
 import contextlib
 import datetime as dt
 import fcntl
+import ipaddress
 import json
 import os
 import pwd
@@ -245,14 +246,27 @@ def inspect_service(
     return data
 
 
+def validate_endpoint_host(host: str) -> None:
+    if host.count(":") > 1 or host.startswith("["):
+        raise DeployError("CAN_DOMAIN does not support IPv6 yet; use a DNS hostname or public IPv4")
+    try:
+        address = ipaddress.IPv4Address(host)
+    except ipaddress.AddressValueError:
+        if DOMAIN.fullmatch(host) and len(host) <= 253:
+            return
+        raise DeployError(
+            "CAN_DOMAIN must be a DNS hostname or canonical public IPv4 address "
+            "without URL, port, path or credentials"
+        ) from None
+    if not address.is_global or address.is_multicast or address.is_reserved:
+        raise DeployError("CAN_DOMAIN IPv4 address must be public and unicast")
+
+
 def prerequisites(runtime: dict[str, str]) -> None:
     for key in ("CAN_BACKUP_REMOTE", "CAN_DELETION_JOURNAL_REMOTE", "CAN_DOMAIN"):
         if not runtime.get(key):
             raise DeployError("Runtime configuration lacks required production settings")
-    if not DOMAIN.fullmatch(runtime["CAN_DOMAIN"]) or len(runtime["CAN_DOMAIN"]) > 253:
-        raise DeployError(
-            "CAN_DOMAIN must be a DNS hostname without URL, port, path or credentials"
-        )
+    validate_endpoint_host(runtime["CAN_DOMAIN"])
     if runtime.get("DOCKER_CONFIG"):
         trusted_path(Path(runtime["DOCKER_CONFIG"]), directory=True)
     for key in ("CAN_SECRETS_DIR", "CAN_DELETION_JOURNAL_DIR", "CAN_BACKUP_DIR"):

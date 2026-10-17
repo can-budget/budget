@@ -1,10 +1,12 @@
 """Static project/fixture consistency checks. Does not compile Swift or run XCTest."""
 from pathlib import Path
 import hashlib
+import ipaddress
 import json
 import plistlib
 import re
 import struct
+from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,8 +76,29 @@ for name, (identifier, target) in targets.items():
 
 scheme = ET.parse(ROOT / "Can.xcodeproj/xcshareddata/xcschemes/Can.xcscheme")
 assert scheme.find(".//TestableReference/BuildableReference").attrib["BlueprintIdentifier"] == targets["CanTests"][0]
+endpoint_setting = re.search(r"^CAN_API_BASE_URL\s*=\s*(\S+)\s*$", (ROOT / "Config/Owner.xcconfig").read_text(), re.MULTILINE)
+assert endpoint_setting, "Owner configuration must set an explicit API origin"
+endpoint = urlsplit(endpoint_setting.group(1).replace("$()", ""))
+assert endpoint.scheme == "https" and endpoint.hostname, "The API origin must use HTTPS"
+assert endpoint.username is None and endpoint.password is None and endpoint.port is None
+assert not endpoint.path and not endpoint.query and not endpoint.fragment, "The API origin cannot contain URL components"
+expected_ats = {}
+try:
+    endpoint_ip = ipaddress.ip_address(endpoint.hostname)
+except ValueError:
+    pass
+else:
+    assert endpoint_ip.version == 4 and endpoint_ip.is_global and not endpoint_ip.is_multicast, "Only public IPv4 endpoints are supported"
+    # iOS 17+ requires an explicit IP entry; retain HTTPS and the default TLS protections.
+    expected_ats = {"NSExceptionDomains": {str(endpoint_ip): {
+        "NSExceptionAllowsInsecureHTTPLoads": False,
+        "NSExceptionMinimumTLSVersion": "TLSv1.2",
+        "NSExceptionRequiresForwardSecrecy": True,
+    }}}
 for folder, entitlement in [("Can", "Can.entitlements"), ("CanWidget", "Widget.entitlements")]:
     info = plistlib.loads((ROOT / folder / "Info.plist").read_bytes())
+    assert info["CanAPIBaseURL"] == "$(CAN_API_BASE_URL)"
+    assert info.get("NSAppTransportSecurity", {}) == expected_ats, (folder, "ATS must match the API IP without weakening transport security")
     rights = plistlib.loads((ROOT / "Config" / entitlement).read_bytes())
     groups = rights["keychain-access-groups"]
     assert groups[0] == "$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)"
@@ -95,4 +118,4 @@ for copy, original in [(ROOT / "Shared/BudgetEngine.swift", original_engine), (f
     assert hashlib.sha256(copy.read_bytes()).digest() == hashlib.sha256(original.read_bytes()).digest(), copy
 count = sum(len(re.findall(r'\bfunc test\w+\(', path.read_text())) for path in (ROOT / "CanTests").glob("*.swift"))
 assert count >= 13
-print(f"PASS static project: 3 targets, shared test scheme, private/shared Keychain groups, APNs environments, 1024px icon; {count} XCTest methods and 240 unchanged fixtures registered. Swift build/XCTest NOT RUN.")
+print(f"PASS static project: 3 targets, shared test scheme, private/shared Keychain groups, APNs environments, HTTPS origin/strict IP ATS, 1024px icon; {count} XCTest methods and 240 unchanged fixtures registered. Swift build/XCTest/network trust NOT RUN.")

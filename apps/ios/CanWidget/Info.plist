@@ -12,6 +12,13 @@
 <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
 <key>NSExtension</key><dict><key>NSExtensionPointIdentifier</key><string>com.apple.widgetkit-extension</string></dict>
 <key>CanAPIBaseURL</key><string>$(CAN_API_BASE_URL)</string>
+<key>NSAppTransportSecurity</key><dict>
+<key>NSExceptionDomains</key><dict>
+<key>151.243.217.6</key><dict>
+<key>NSExceptionAllowsInsecureHTTPLoads</key><false/>
+<key>NSExceptionMinimumTLSVersion</key><string>TLSv1.2</string>
+<key>NSExceptionRequiresForwardSecrecy</key><true/>
+</dict></dict></dict>
 <key>CanAppGroup</key><string>$(CAN_APP_GROUP)</string>
 <key>CanPrivateKeychainGroup</key><string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 <key>CanKeychainGroup</key><string>$(AppIdentifierPrefix)$(CAN_KEYCHAIN_GROUP)</string>

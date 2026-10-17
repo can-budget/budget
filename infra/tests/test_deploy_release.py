@@ -449,6 +449,14 @@ def test_incompatible_platform_stops_before_backup_or_migration(setup, component
         "api.example.invalid/path",
         "a@b.invalid",
         "api.example.invalid?key=value",
+        "https://151.243.217.6",
+        "151.243.217.6:443",
+        "151.243.217.6/path",
+        "owner@151.243.217.6",
+        "151.243.217.6?key=value",
+        "151.243.217.6#fragment",
+        "151.243.217.6\\path",
+        "151.243.217.6\n",
     ],
 )
 def test_domain_cannot_inject_url_components(setup, domain):
@@ -456,6 +464,83 @@ def test_domain_cannot_inject_url_components(setup, domain):
     with pytest.raises(release.DeployError, match="DNS hostname"):
         invoke(setup)
     assert not setup.commands.calls
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "127.0.0.1",
+        "0.0.0.0",
+        "10.0.0.1",
+        "172.16.0.1",
+        "192.168.0.1",
+        "169.254.169.254",
+        "100.64.0.1",
+        "192.0.2.1",
+        "198.51.100.1",
+        "203.0.113.1",
+        "198.18.0.1",
+        "224.0.0.1",
+        "239.255.255.255",
+        "240.0.0.1",
+        "255.255.255.255",
+    ],
+)
+def test_nonpublic_or_nonunicast_ipv4_stops_before_commands_or_state_changes(setup, host):
+    setup.runtime["CAN_DOMAIN"] = host
+    with pytest.raises(release.DeployError, match="public and unicast"):
+        invoke(setup)
+    assert not setup.commands.calls
+    assert not (setup.root / "state").exists()
+    assert_old_release(setup)
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "151.243.217.006",
+        "151.243.217.6.",
+        "151.243.55558",
+        "2549348614",
+        "0x97f3d906",
+        "0x97.0xf3.0xd9.0x6",
+        "0227.0363.0331.06",
+        "151.243.217.256",
+        "127.1",
+    ],
+)
+def test_ambiguous_numeric_hosts_are_never_treated_as_dns(setup, host):
+    setup.runtime["CAN_DOMAIN"] = host
+    with pytest.raises(release.DeployError, match="canonical public IPv4"):
+        invoke(setup)
+    assert not setup.commands.calls
+    assert_old_release(setup)
+
+
+@pytest.mark.parametrize("host", ["2001:4860:4860::8888", "[2001:4860:4860::8888]", "::1"])
+def test_ipv6_requires_explicit_support_before_deployment(setup, host):
+    setup.runtime["CAN_DOMAIN"] = host
+    with pytest.raises(release.DeployError, match="does not support IPv6"):
+        invoke(setup)
+    assert not setup.commands.calls
+
+
+@pytest.mark.parametrize("host", ["151.243.217.6", "budget-api.example.com"])
+def test_public_endpoint_deploys_using_verified_https_without_url_rewriting(setup, host):
+    setup.runtime["CAN_DOMAIN"] = host
+    invoke(setup)
+    checks = [
+        (args, env)
+        for stage, args, env in setup.commands.calls
+        if stage == "verify public HTTPS readiness"
+    ]
+    assert checks
+    for args, env in checks:
+        assert args[-1] == "https://" + host + "/health/ready"
+        assert args[args.index("--proto") + 1] == "=https"
+        assert not {"--insecure", "-k", "--location", "-L"} & set(args)
+        assert env["CAN_DOMAIN"] == host
+    assert (setup.root / "current").resolve() == setup.candidate
 
 
 def test_https_check_retries_caddy_transient_503_with_bounded_timeout(setup):

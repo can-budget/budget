@@ -5,7 +5,7 @@ instruction supersedes the handoff's permanent staging requirement. Disposable C
 databases and isolated recovery drills are not permanent staging environments.
 
 These are executable configuration and recovery tools, not evidence of a deployed
-service. Docker, DNS, TLS issuance, Apple credentials, live APNs and a real restore
+service. Docker, TLS issuance, Apple credentials, live APNs and a real restore
 must be validated on the owner's infrastructure before release.
 
 ## Runtime and credentials
@@ -24,7 +24,8 @@ without restricting `--forwarded-allow-ips` to an explicit trusted proxy address
 
 Prerequisites: an owner-controlled Linux server with host Python 3.11+ available
 as `/usr/bin/python3`/`python3`, `curl`, Docker Engine and Compose v2,
-DNS pointing to it, inbound 80/443, outbound Apple/ACME access, synchronized clock
+the owner's fixed public IPv4 (or DNS pointing to it), inbound 80/443,
+outbound Apple/ACME access, synchronized clock
 and disk monitoring. The explicit `scripts/prepare-host.sh` helper prepares
 Ubuntu 24.04 host prerequisites; Docker, firewall and SSH settings remain
 owner-managed. It creates no production configuration or running application.
@@ -36,7 +37,7 @@ interactive environment, without storing them in tracked files:
 | --- | --- |
 | `CAN_RELEASE` | Reviewed source revision / fallback local image tag; keep it stable during recovery |
 | `CAN_IMAGE` | Optional immutable GHCR image reference; required by automatic delivery, overrides the local tag |
-| `CAN_DOMAIN`, `CAN_ACME_EMAIL` | Public API hostname and owner's certificate contact |
+| `CAN_DOMAIN` | Public API host without scheme/port/path; current owner choice is `151.243.217.6` |
 | `CAN_SECRETS_DIR` | Absolute owner-managed directory outside the checkout |
 | `CAN_DELETION_JOURNAL_DIR` | Persistent private journal directory, normally `/var/lib/can-deletions` |
 | `CAN_APPLE_CLIENT_ID`, `CAN_APPLE_TEAM_ID`, `CAN_APPLE_KEY_ID` | Owner app Bundle ID, team and Sign in with Apple key identifiers |
@@ -68,6 +69,64 @@ reads its password inside PostgreSQL. Initialization occurs only on an empty
 volume. Changing a secret file does **not** rotate an existing PostgreSQL password;
 rotation needs a coordinated owner-controlled database action and service restart.
 Encryption-key replacement also requires data re-encryption or retained old keys.
+
+## HTTPS on the public IP
+
+The owner selected `https://151.243.217.6` on 2026-10-17. No purchased domain,
+DNS record or ACME email is required for this deployment. The legacy setting
+name `CAN_DOMAIN` is retained; it accepts a DNS hostname or a canonical global
+IPv4 address. Local/reserved IPs, alternative numeric forms and IPv6 are rejected
+by the automatic deployer. Keep the public IP reserved: changing it requires an
+iOS configuration update and a new mobile release.
+
+Caddy uses an explicit Let's Encrypt ACME issuer with the `shortlived` profile.
+IP certificates last 160 hours and require automatic renewal; the persistent
+`caddy_data` volume holds its account and certificate state. Keep inbound 80/443
+and outbound ACME access available continuously and monitor certificate expiry.
+The global `default_sni` is the public host because IP clients can omit SNI and
+the Docker container's local IP differs from the public address. No private CA,
+manual phone trust installation or disabled client certificate verification is
+used. `CAN_ACME_EMAIL` is no longer needed; old runtime files may retain it.
+
+The same production ingress can start before Apple/database credentials exist.
+From a reviewed checkout, ensure 80/443 are free and no existing application
+deployment owns this Compose project, then run:
+
+```sh
+export CAN_DOMAIN=151.243.217.6
+docker compose --project-name can-production --env-file /dev/null -f infra/compose.ingress.yaml config --quiet
+docker compose --project-name can-production --env-file /dev/null -f infra/compose.ingress.yaml pull caddy
+docker compose --project-name can-production --env-file /dev/null -f infra/compose.ingress.yaml run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+docker compose --project-name can-production --env-file /dev/null -f infra/compose.ingress.yaml up -d --wait caddy
+```
+
+This starts only the production `caddy` service, using the same edge network and
+certificate volumes as `compose.yaml`. It returns an upstream-unavailable error
+until the real API becomes healthy; this is not a running budget or a successful
+API readiness check. Do not set `current` or release-success markers for ingress
+alone. Do not run this bootstrap command over an already operating application.
+For the first complete release, use `compose.yaml` with the **same project name**;
+Compose replaces the ingress container while preserving its certificate volumes.
+Never run `down --volumes` during this transition.
+
+Check both public trust and IP identity without `-k` / `--insecure`:
+
+```sh
+curl --silent --show-error --output /dev/null --write-out '%{http_code}\n' https://151.243.217.6/health/ready
+openssl s_client -connect 151.243.217.6:443 -noservername -verify_ip 151.243.217.6 -verify_return_error </dev/null
+```
+
+Before the API exists, a non-2xx HTTP response is expected; a certificate error
+is not. Inspect the leaf's IP SAN and expiration separately. Issuance, restart
+with persisted certificates and scheduled renewal are different checks; record
+only what actually ran. Both iOS targets declare this exact IP in ATS while
+retaining HTTPS, TLS 1.2 minimum and Forward Secrecy. Validate URLSession on the
+supported physical iPhones, including China without VPN, before acceptance.
+
+References: [Let's Encrypt IP certificates](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability),
+[Caddy ACME profiles](https://caddyserver.com/docs/caddyfile/directives/tls#issuers),
+[default SNI](https://caddyserver.com/docs/caddyfile/options#default-sni),
+[Apple IP exceptions](https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/nsexceptiondomains).
 
 ## First authorized deployment
 

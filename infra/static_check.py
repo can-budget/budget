@@ -13,10 +13,21 @@ ROOT = Path(__file__).resolve().parents[1]
 def main() -> None:
     compose = yaml.safe_load((ROOT / "infra/compose.yaml").read_text())
     restore = yaml.safe_load((ROOT / "infra/compose.restore.yaml").read_text())
+    ingress = yaml.safe_load((ROOT / "infra/compose.ingress.yaml").read_text())
     workflow = yaml.safe_load((ROOT / ".github/workflows/verify.yml").read_text())
     assert compose["name"] == "can-production"
     assert compose["networks"]["data"]["internal"] is True
     assert set(compose["services"]) == {"db", "api", "worker", "migrate", "caddy"}
+    assert ingress["name"] == compose["name"]
+    assert set(ingress["services"]) == {"caddy"}
+    # Bootstrap must reuse the exact production ingress and persistent storage.
+    production_caddy = dict(compose["services"]["caddy"])
+    production_caddy.pop("depends_on")
+    assert ingress["services"]["caddy"] == production_caddy
+    assert ingress["networks"] == {"edge": compose["networks"]["edge"]}
+    assert ingress["volumes"] == {
+        key: compose["volumes"][key] for key in ("caddy_data", "caddy_config")
+    }
     for name, service in compose["services"].items():
         assert not service.get("privileged")
         if name != "caddy":
@@ -72,7 +83,7 @@ def main() -> None:
     verify = (ROOT / "infra/scripts/verify-restore.sh").read_text()
     assert verify.index('" check') < verify.index("docker run")
     print(
-        f"PASS: 2 Compose files, CI/CD policy, {len(shell_files)} shell scripts, infrastructure Python syntax"
+        f"PASS: 3 Compose files, CI/CD policy, {len(shell_files)} shell scripts, infrastructure Python syntax"
     )
     print("NOT RUN: Docker image build, Compose schema/runtime, HTTPS, PostgreSQL, backup/restore.")
 

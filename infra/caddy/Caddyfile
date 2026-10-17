@@ -1,8 +1,16 @@
 {
-	email {$CAN_ACME_EMAIL}
+	# IP-literal HTTPS clients may omit SNI; Docker's local IP is different.
+	default_sni {$CAN_DOMAIN}
 }
 
-{$CAN_DOMAIN} {
+https://{$CAN_DOMAIN} {
+	# Public IP certificates require an explicit ACME issuer and this profile.
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+		}
+	}
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"

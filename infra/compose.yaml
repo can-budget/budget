@@ -110,8 +110,7 @@ services:
     cap_add: [NET_BIND_SERVICE]
     security_opt: [no-new-privileges:true]
     environment:
-      CAN_DOMAIN: ${CAN_DOMAIN:?Set the public API DNS hostname}
-      CAN_ACME_EMAIL: ${CAN_ACME_EMAIL:?Set the owner certificate contact}
+      CAN_DOMAIN: ${CAN_DOMAIN:?Set the public API IPv4 address or DNS hostname}
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes:
       - ./caddy:/etc/caddy:ro

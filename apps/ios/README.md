@@ -13,13 +13,15 @@
 | `CAN_WIDGET_BUNDLE_ID` | Отдельный App ID расширения, обычно `<app bundle>.widget` |
 | `CAN_APP_GROUP` | Зарегистрированный `group.…`, одинаковый для обоих targets |
 | `CAN_KEYCHAIN_GROUP` | Общая группа Keychain без Team/App Identifier Prefix; prefix добавляет Xcode |
-| `CAN_API_BASE_URL` | HTTPS origin production API без `/v1`, например `https:/$()/budget.example.com` |
+| `CAN_API_BASE_URL` | HTTPS origin production API без `/v1`; выбран `https:/$()/151.243.217.6` |
 
 `/$()/` в xcconfig предотвращает трактовку `//` как комментария; в Info.plist получается обычный `https://`. Адрес `.invalid` намеренно блокирует вход и сетевые операции. Токены, `.p8`, пароли и сертификаты в репозиторий не добавляются.
 
+Владелец выбрал работу по публичному IP без домена. Оба Info.plist содержат точную запись `151.243.217.6` в `NSExceptionDomains`: insecure HTTP запрещён, минимальная TLS 1.2 и Forward Secrecy сохранены. Глобальное отключение ATS и собственная проверка доверия не добавляются. Сервер должен предъявлять публично доверенный сертификат с этим IP в SAN; установка корневого сертификата на телефоны не требуется. Статика проверяет соответствие origin и ATS обеих целей; работу URLSession на целевых iPhone ещё необходимо проверить. При смене IP одновременно обновите `Owner.xcconfig` и обе ATS-записи и выпустите новую сборку. [Apple: IP-подключения с iOS 17](https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/nsallowslocalnetworking).
+
 В Apple Developer включите Sign in with Apple для основного App ID, App Groups и Push Notifications для соответствующих App IDs, разрешите общую группу Keychain в профилях. Оба target должны подписываться командой владельца. У каждого target первая Keychain group приватная (`AppIdentifierPrefix + bundle ID`); общая группа используется **явно** только для read-only токена/регистрации виджета. Access/refresh tokens приложения в общую группу не записываются.
 
-В backend `CAN_APPLE_CLIENT_ID` должен совпадать с bundle ID приложения, Team/Key ID и Apple private key настраиваются владельцем в защищённом серверном хранилище. Это нативный Apple login: challenge → SHA-256 nonce → identity token + authorization code → backend. Отдельный web Service ID, redirect URL или associated domain этому потоку не нужны. HTTPS домен сервера задаётся `CAN_API_BASE_URL`. Вход и отзыв Apple обязательно проверить настоящим подписанным приложением.
+В backend `CAN_APPLE_CLIENT_ID` должен совпадать с bundle ID приложения, Team/Key ID и Apple private key настраиваются владельцем в защищённом серверном хранилище. Это нативный Apple login: challenge → SHA-256 nonce → identity token + authorization code → backend. Отдельный web Service ID, redirect URL или associated domain этому потоку не нужны. HTTPS адрес сервера задаётся `CAN_API_BASE_URL`. Вход и отзыв Apple обязательно проверить настоящим подписанным приложением.
 
 Debug использует entitlement `aps-environment=development`, а backend-регистрацию `apns_environment=sandbox`. Release использует `production` в обоих местах. App APNs topic — bundle ID приложения. Для прямого WidgetKit push на iOS 26+ требуется отдельно проверить topic/capability расширения в аккаунте владельца и APNs. iOS 17–25 используют обычное обновление приложения, общий снимок и WidgetKit timeline; система не гарантирует точное время фонового обновления.
 

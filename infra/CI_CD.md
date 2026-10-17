@@ -86,10 +86,17 @@ registry token independently.
 ## One-time VPS preparation
 
 Confirm Ubuntu/Linux amd64, host Python 3.11+ at `/usr/bin/python3`/`python3`,
-`curl`, public IP, DNS, Docker Engine/Compose, clock, disk and
+`curl`, the fixed public IPv4 (DNS is optional), Docker Engine/Compose, clock, disk and
 outbound GHCR/Apple/backup access. The inspected VPS has 2 vCPU, 1.8 GiB usable
 RAM and a 58 GiB system disk; application capacity has not been measured. Builds run in GitHub
 to avoid putting compiler/package-install load on the small production VPS.
+
+The owner selected direct IP HTTPS: `CAN_DOMAIN=151.243.217.6`. The name of this
+setting is retained for compatibility; no ACME email or domain purchase is
+required. See [IP HTTPS bootstrap](README.md#https-on-the-public-ip) for explicit
+public ACME issuance, no-SNI clients, persistent renewal state and starting the
+production Caddy service before application credentials are available. This
+ingress-only stage does not satisfy the healthy baseline required by CD.
 
 Follow [production operations](README.md) for credentials, PostgreSQL bootstrap,
 deletion-journal initialization, systemd timers and a successful restore drill.
