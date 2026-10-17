@@ -17,16 +17,16 @@ personal/financial data in this document.
 
 | Field | Actual value |
 | --- | --- |
-| Source commit | Implementation, CI/CD and public IP HTTPS through `bf95dbe`; replace with the exact release commit when executing this record |
+| Source commit | Implementation and container/PostgreSQL verification through `d36768f`; replace with the exact release commit when executing this record |
 | App version / build / archive | NOT RUN |
 | API image digest / migration revision | NOT DEPLOYED |
 | Environment / HTTPS origin | `https://151.243.217.6`: public trust and IP identity verified; ingress running, application NOT DEPLOYED |
-| Apple signing team / entitlement review | NOT VERIFIED |
+| Apple signing team / entitlement review | Owner confirmed ordinary Apple ID only on 2026-10-17; paid membership/signing NOT READY |
 | Device A model / iOS | NOT PROVIDED |
 | Device B model / iOS | NOT PROVIDED |
 | Independent test Apple identities | NOT VERIFIED |
 | Networks / RTT / measurement date | NOT MEASURED |
-| Disposable PostgreSQL test run | NOT RUN |
+| Disposable PostgreSQL test run | 18/18 PASS on PostgreSQL 18.6 / Python 3.13.16, source `d36768f`; isolated VPS containers removed after the run |
 | Isolated restore run / backup identifier | NOT RUN |
 
 ## Scenario results

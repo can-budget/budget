@@ -35,14 +35,14 @@ in `contracts/README.md`.
 
 ## Executed checks
 
-`make verify` completed successfully for the IP HTTPS changes committed as
-`bf95dbe` in this Linux environment. The table records that complete run:
+`make verify` completed successfully through `d36768f` in this Linux environment.
+The table records that complete run:
 
 | Check | Observed result |
 | --- | --- |
 | Ruff | PASS |
 | mypy | PASS, 14 backend source files |
-| API unit tests | 293 PASS; 18 PostgreSQL cases deliberately deselected |
+| API unit tests | 294 PASS; 18 PostgreSQL cases deliberately deselected and subsequently run on the VPS as described below |
 | Original calculation suite | 7 methods PASS, including 240 golden cases and randomized invariants |
 | Original contract verifier | PASS, 48 schemas / 246 references / 23 operations |
 | Active implementation contract | PASS, 50 schemas / 267 references / 25 operations |
@@ -63,7 +63,7 @@ Additional executed checks:
 - The credential checker rejected a synthetic token in a temporary fixture and
   did not include its value in the error output.
 - Git whitespace checks passed for the local commit groups. Implementation,
-  CI/CD tooling, host preparation and IP HTTPS are committed through `bf95dbe`; the
+  CI/CD tooling, host preparation, IP HTTPS and validation fixes are committed through `d36768f`; the
   following documentation commit records this report. No release build has
   been produced.
 - Earlier in this implementation, an in-process `/health/live` check and Python
@@ -133,10 +133,9 @@ HTTPS/TLS requirements. No production release-success marker was created.
 
 ## Not yet verified
 
-- PostgreSQL migration execution and all 18 database integration cases:
-  `make test-postgres` requires an explicitly selected disposable database.
-- Backend Docker image build, complete application Compose startup and production
-  API/worker/database health. Ingress/TLS evidence is recorded separately above.
+- First production database bootstrap, complete application Compose startup and
+  production API/worker/database health. The real isolated database tests and
+  backend image build below do not constitute a production deployment.
 - GitHub environment/branch rules, GHCR publication, dedicated CI SSH credentials,
   application bootstrap and a real main-to-production workflow run. The deploy
   tests use fake commands and temporary files, not a production Docker daemon.
@@ -169,6 +168,51 @@ Apple settings/keys, the independent backup destination, registry pull credentia
 and dedicated CI key still require owner provisioning through an approved secure
 path. A domain and ACME contact email are no longer required for the selected IP
 deployment. Server access alone does not configure the remaining external services.
+
+## Real container and PostgreSQL verification — 2026-10-17
+
+The authorized VPS built the production Dockerfile from a clean, SHA256-verified
+archive of `d36768fc85d63dfd1a75479614398191c04e7764`. The new `.dockerignore`
+allowlist limits normal builds to runtime API, package metadata/lock and migration
+sources; local environments, credentials, tests and unrelated files are excluded.
+
+- Built image: `can-api:d36768fc85d63dfd1a75479614398191c04e7764`;
+  local image ID `sha256:3b2d32ed5bc1c2fa6409cb4e4244d5f6aeb06a08b4d7e3bf871920d3fad2e5c0`.
+  This is a local image, not a published GHCR release digest.
+- Verified Linux amd64, Python 3.13.16, non-root UID/GID 10001, installed API
+  imports and packaged migration SQL. A disposable container using the real
+  Uvicorn command, read-only filesystem, no network and no capabilities returned
+  HTTP 200 at `/health/live`; missing dependencies correctly returned HTTP 503
+  at `/health/ready`. No public application listener was enabled.
+- PostgreSQL 18.6 image digest:
+  `sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c`.
+  An internal-only disposable network and tmpfs database ran all **18 integration
+  tests: PASS, zero skipped/errors/failures**, in 9.168 seconds. The fixture applies
+  the real migrations twice in each isolated schema. Apple calls and journal
+  acknowledgments remain test doubles; no Apple or off-host recovery claim follows.
+- The first run exposed one invalid test checkpoint: two separate clock reads put
+  its recovery floor after its creation timestamp. `d36768f` uses one frozen test
+  instant and adds a one-microsecond rejection case; production validation is
+  unchanged. An intermediate test-container file-permission problem was corrected
+  before the final successful run; failed job starts were not counted as passes.
+- Final job `can-live-retest-d36768f`: `Result=success`, `ExecMainStatus=0`;
+  test container exit 0, no OOM. JUnit evidence is retained at
+  `/opt/can/validation/d36768fc85d63dfd1a75479614398191c04e7764/results/postgres-results.xml`.
+  The temporary test containers/network were removed; no production schema or
+  financial data was created. Alembic also emitted its legacy `path_separator`
+  deprecation warning; tests still passed.
+- Generated four independent internal secrets directly on the VPS in the private
+  `/etc/can/secrets` directory: database admin/app passwords, application encryption
+  key and invitation HMAC key. Values were not returned or stored in Git. Existing
+  files are preserved. Owner recovery-vault copies have not yet been provisioned.
+
+The owner confirmed an ordinary Apple ID only; paid Developer membership and real
+Sign in with Apple/APNs keys are absent. Independent backup storage and its public
+recovery recipient remain unspecified. `runtime.conf`, the healthy `current`
+baseline, backup/journal timers, GHCR pull access and dedicated CI SSH delivery are
+still missing. The private organization's GitHub environment availability must also
+be checked as documented in `infra/CI_CD.md`. No main merge or automatic release was
+performed, and the external API readiness endpoint still returns HTTP 503.
 
 ## Account deletion: implemented decision and boundaries
 
