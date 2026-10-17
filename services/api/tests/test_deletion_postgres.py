@@ -314,9 +314,9 @@ def test_retention_clears_only_after_age_and_signed_backup_floor_but_keeps_retry
     checkpoint = {
         "version": 1,
         "sequence": 2,
-        "created_at": now().isoformat(),
+        "created_at": future.isoformat(),
         "previous_checkpoint": journal.sha((tmp_path / "checkpoint.json").read_bytes()),
-        "restore_not_before": now().isoformat(),
+        "restore_not_before": future.isoformat(),
         "records": [],
     }
     key = hmac.digest(

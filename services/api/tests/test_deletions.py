@@ -255,6 +255,10 @@ def test_replayed_erasure_can_extend_but_never_shorten_retention(deletion_config
         {"previous_checkpoint": None},
         {"created_at": "2026-01-01T00:00:00"},
         {"restore_not_before": "2099-01-01T00:00:00Z"},
+        {
+            "created_at": "2026-01-01T00:00:00Z",
+            "restore_not_before": "2026-01-01T00:00:00.000001Z",
+        },
         {"sequence": True},
         {
             "records": [
