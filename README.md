@@ -66,8 +66,10 @@ credentials. There is no fake-login route or seeded runtime budget.
 Follow [production operations](infra/README.md) for the single-server deployment,
 credential-file mounts, first migration, updates, backup and isolated recovery.
 Follow [backend CI/CD activation](infra/CI_CD.md) for `dev` checks and automatic
-`main` deployment. The workflow is prepared; GitHub settings and the VPS must
-still be connected and bootstrapped before it can run successfully.
+`main` deployment. The owner selected `https://151.243.217.6` without a purchased
+domain. Public HTTPS ingress is running; the application still requires Apple
+credentials, independent backup storage and its first database bootstrap.
+GitHub deployment settings and the successful main workflow remain unverified.
 Keep credentials outside the repository. Follow [iOS instructions](apps/ios/README.md)
 for owner signing and [two-phone delivery](docs/IOS_DELIVERY.md) for manual
 TestFlight/Ad Hoc choices and their expiry requirements. Use the original

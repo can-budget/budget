@@ -1,6 +1,6 @@
 # Release acceptance record
 
-Updated on 2026-10-14. This is a run sheet, not signed acceptance.
+Updated on 2026-10-17. This is a run sheet, not signed acceptance.
 The owner has deferred release, installation and physical-device verification
 until implementation is ready. Local evidence is recorded separately in
 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
@@ -17,10 +17,10 @@ personal/financial data in this document.
 
 | Field | Actual value |
 | --- | --- |
-| Source commit | Implementation, CI/CD and host preparation through `b76ae3f`; replace with the exact release commit when executing this record |
+| Source commit | Implementation, CI/CD and public IP HTTPS through `bf95dbe`; replace with the exact release commit when executing this record |
 | App version / build / archive | NOT RUN |
 | API image digest / migration revision | NOT DEPLOYED |
-| Environment / HTTPS origin | VPS access and host prerequisites verified; application / HTTPS NOT DEPLOYED |
+| Environment / HTTPS origin | `https://151.243.217.6`: public trust and IP identity verified; ingress running, application NOT DEPLOYED |
 | Apple signing team / entitlement review | NOT VERIFIED |
 | Device A model / iOS | NOT PROVIDED |
 | Device B model / iOS | NOT PROVIDED |
@@ -64,7 +64,7 @@ scenario actually executes. A failing assertion is FAIL, never a presumed PASS.
 | 25 | Installed medium widget under power/network/lock/day changes | Signed TestFlight app on two iPhones | NOT RUN | Pending |
 | 26 | Apple/Keychain/APNs/widget scope, revoke and no sensitive logs | Signed app, PostgreSQL and Apple services | NOT RUN | Local validation evidence only |
 | 27 | Separate permanent staging and production | Superseded by owner decision | NOT APPLICABLE | One production environment approved |
-| 28 | Production reachable on users' actual networks without VPN | Production and both users' networks | NOT RUN | Pending |
+| 28 | Production reachable on users' actual networks without VPN | Production and both users' networks | NOT RUN | Public HTTPS verified outside VPS; users' China networks and application pending |
 | 29 | In-place app update preserves data; reproducible next release | Two successive signed builds | NOT RUN | Pending |
 | 30 | Encrypted backup, isolated restore, deletion replay, owner access | Independent backup destination and isolated PostgreSQL | NOT RUN | Journal protocol unit tests only |
 | 31 | Approved account deletion, anonymous ledger and Apple revoke | PostgreSQL, Apple and two iPhones | NOT RUN | R01 implementation and local tests complete |

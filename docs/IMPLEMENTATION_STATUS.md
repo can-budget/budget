@@ -1,4 +1,4 @@
-# Implementation verification — 2026-10-14
+# Implementation verification — 2026-10-17
 
 This report describes the current working checkout, not a deployed release.
 The owner's current scope is personal/family use with one production server.
@@ -35,9 +35,8 @@ in `contracts/README.md`.
 
 ## Executed checks
 
-`make verify` completed successfully at `9d16c5d` in this Linux environment.
-After the existing-account compatibility fix in `b76ae3f`, `make infra-test`
-and `make infra-check` passed again; the table includes those latest results:
+`make verify` completed successfully for the IP HTTPS changes committed as
+`bf95dbe` in this Linux environment. The table records that complete run:
 
 | Check | Observed result |
 | --- | --- |
@@ -47,10 +46,10 @@ and `make infra-check` passed again; the table includes those latest results:
 | Original calculation suite | 7 methods PASS, including 240 golden cases and randomized invariants |
 | Original contract verifier | PASS, 48 schemas / 246 references / 23 operations |
 | Active implementation contract | PASS, 50 schemas / 267 references / 25 operations |
-| Infrastructure static checks | PASS, 2 Compose files, CI/CD policy, 8 shell scripts and infrastructure Python syntax |
-| Infrastructure unit tests | 125 PASS: 35 journal protocol tests, 51 deployment safety tests, 25 transport/head-gate tests and 14 host-preparation tests; all use temporary state and controlled commands/transports |
-| iOS project static checks | PASS, 3 targets, scheme, entitlements, icon and fixture identity; 25 XCTest methods registered |
-| Recognizable credential-pattern check | PASS, 108 authored text files; this is a bounded pattern check, not proof that arbitrary secrets are absent |
+| Infrastructure static checks | PASS, 3 Compose files, CI/CD policy, 8 shell scripts and infrastructure Python syntax |
+| Infrastructure unit tests | 162 PASS: 35 journal protocol tests, 88 deployment safety tests, 25 transport/head-gate tests and 14 host-preparation tests; all use temporary state and controlled commands/transports |
+| iOS project static checks | PASS, 3 targets, scheme, entitlements, strict IP ATS/origin agreement, icon and fixture identity; 25 XCTest methods registered |
+| Recognizable credential-pattern check | PASS, 109 authored text files; this is a bounded pattern check, not proof that arbitrary secrets are absent |
 
 The Python suite emits one Starlette TestClient deprecation warning about its
 httpx adapter. It does not affect the recorded test result.
@@ -64,7 +63,7 @@ Additional executed checks:
 - The credential checker rejected a synthetic token in a temporary fixture and
   did not include its value in the error output.
 - Git whitespace checks passed for the local commit groups. Implementation,
-  CI/CD tooling and host preparation are committed through `b76ae3f`; the
+  CI/CD tooling, host preparation and IP HTTPS are committed through `bf95dbe`; the
   following documentation commit records this report. No release build has
   been produced.
 - Earlier in this implementation, an in-process `/health/live` check and Python
@@ -101,11 +100,43 @@ has regression coverage. No existing SSH key, shell or password was replaced.
 Production `runtime.conf` and the `current` release link remain absent; host
 preparation is not application deployment.
 
+## Observed public IP HTTPS — 2026-10-17
+
+The owner selected HTTPS directly on `151.243.217.6`. The reviewed Caddyfile and
+ingress-only Compose from `bf95dbe` are installed under
+`/opt/can/bootstrap/ip-https-bf95dbe`. The running `can-production-caddy-1` uses the
+production project, edge network and persistent certificate volumes. Backend,
+worker and database containers have not been started.
+
+- Docker pulled and ran Caddy 2.11.7. Recorded image digest:
+  `sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f`.
+- Actual Compose schema check, Caddy configuration validation and ingress startup
+  passed. The container's administrative health check passed.
+- A public Let's Encrypt certificate (issuer YE2) was issued with IP SAN
+  `151.243.217.6`, valid from 2026-10-17 03:00:23 UTC to 2026-10-23 19:00:22 UTC.
+  Initial validity is approximately 160 hours. These dates record the first
+  certificate, not a fixed release configuration.
+- Python/system trust and IP identity verification passed with TLS 1.3.
+  An explicit OpenSSL handshake without SNI passed certificate verification.
+- An HTTPS request from this task environment, outside the VPS, succeeded with
+  `ssl_verify_result=0` and HTTP 503 at `/health/ready`. The 503 is expected while
+  the real API is absent; API readiness has not passed.
+- Live Caddy configuration confirmed the public ACME `shortlived` policy and the
+  production certificate volumes. After a container restart, verified HTTPS
+  served the same certificate fingerprint from persistent storage.
+
+Caddy is configured for automatic renewal with the public ACME `shortlived`
+profile and persistent volumes. A scheduled renewal cycle has not yet elapsed
+or been observed. China without VPN and iPhone URLSession trust remain untested.
+Both iOS targets now use the selected IP and exact ATS declarations preserving
+HTTPS/TLS requirements. No production release-success marker was created.
+
 ## Not yet verified
 
 - PostgreSQL migration execution and all 18 database integration cases:
   `make test-postgres` requires an explicitly selected disposable database.
-- Docker image build and actual Compose startup, DNS/TLS and production health.
+- Backend Docker image build, complete application Compose startup and production
+  API/worker/database health. Ingress/TLS evidence is recorded separately above.
 - GitHub environment/branch rules, GHCR publication, dedicated CI SSH credentials,
   application bootstrap and a real main-to-production workflow run. The deploy
   tests use fake commands and temporary files, not a production Docker daemon.
@@ -134,9 +165,10 @@ direct `main` push/merge. Its allowed prefixes also exclude the requested remote
 `dev` branch; `dev` exists only locally. No application deployment, live migration
 or TestFlight upload was performed.
 
-The production domain, Apple settings/keys, independent backup destination,
-registry pull credential and dedicated CI key still require owner provisioning
-through an approved secure path. Server access alone does not configure these.
+Apple settings/keys, the independent backup destination, registry pull credential
+and dedicated CI key still require owner provisioning through an approved secure
+path. A domain and ACME contact email are no longer required for the selected IP
+deployment. Server access alone does not configure the remaining external services.
 
 ## Account deletion: implemented decision and boundaries
 
