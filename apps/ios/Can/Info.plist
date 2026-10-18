@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleDevelopmentRegion</key><string>ru</string>
+<key>CFBundleDisplayName</key><string>Можно</string>
+<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+<key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+<key>LSRequiresIPhoneOS</key><true/>
+<key>UILaunchScreen</key><dict/>
+<key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
+<key>UIUserInterfaceStyle</key><string>Dark</string>
+<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+<key>UIBackgroundModes</key><array><string>remote-notification</string></array>
+<key>NSCameraUsageDescription</key><string>Камера нужна только для сканирования QR приглашения. Кадры не сохраняются и не отправляются.</string>
+<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>can.expense</string><key>CFBundleURLSchemes</key><array><string>can</string></array></dict></array>
+<key>CanAPIBaseURL</key><string>$(CAN_API_BASE_URL)</string>
+<key>NSAppTransportSecurity</key><dict>
+<key>NSExceptionDomains</key><dict>
+<key>151.243.217.6</key><dict>
+<key>NSExceptionAllowsInsecureHTTPLoads</key><false/>
+<key>NSExceptionMinimumTLSVersion</key><string>TLSv1.2</string>
+<key>NSExceptionRequiresForwardSecrecy</key><true/>
+</dict></dict></dict>
+<key>CanAppGroup</key><string>$(CAN_APP_GROUP)</string>
+<key>CanPrivateKeychainGroup</key><string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+<key>CanKeychainGroup</key><string>$(AppIdentifierPrefix)$(CAN_KEYCHAIN_GROUP)</string>
+<key>CanAPNSEnvironment</key><string>$(CAN_APNS_ENVIRONMENT)</string>
+<key>ITSAppUsesNonExemptEncryption</key><false/>
+</dict></plist>

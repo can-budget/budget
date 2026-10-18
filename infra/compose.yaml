@@ -1,0 +1,154 @@
+name: can-production
+
+x-backend: &backend
+  image: ${CAN_IMAGE:-can-api:${CAN_RELEASE:?Set CAN_RELEASE to the reviewed source revision}}
+  build:
+    context: ..
+    dockerfile: infra/Dockerfile
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  networks: [data, edge]
+  environment: &backend-environment
+    CAN_ENVIRONMENT: production
+    CAN_DATABASE_HOST: db
+    CAN_DATABASE_PORT: "5432"
+    CAN_DATABASE_NAME: can
+    CAN_DATABASE_USER: can
+    CAN_DATABASE_PASSWORD_FILE: /run/secrets/database_password
+    CAN_ENCRYPTION_KEY_FILE: /run/secrets/encryption_key
+    CAN_INVITATION_HMAC_KEY_FILE: /run/secrets/invitation_hmac_key
+    CAN_APPLE_CLIENT_ID: ${CAN_APPLE_CLIENT_ID:?Set the owner app Bundle ID}
+    CAN_APPLE_TEAM_ID: ${CAN_APPLE_TEAM_ID:?Set the owner Apple Team ID}
+    CAN_APPLE_KEY_ID: ${CAN_APPLE_KEY_ID:?Set the Sign in with Apple key ID}
+    CAN_APPLE_PRIVATE_KEY_FILE: /run/secrets/apple_private_key
+    CAN_APNS_TEAM_ID: ${CAN_APPLE_TEAM_ID:?Set the owner Apple Team ID}
+    CAN_APNS_KEY_ID: ${CAN_APNS_KEY_ID:?Set the APNs key ID}
+    CAN_APNS_PRIVATE_KEY_FILE: /run/secrets/apns_private_key
+    CAN_APNS_APP_TOPIC: ${CAN_APPLE_CLIENT_ID:?Set the owner app Bundle ID}
+    CAN_APNS_WIDGET_TOPIC: ${CAN_APNS_WIDGET_TOPIC:-}
+    CAN_DELETION_JOURNAL_DIR: /var/lib/can-deletions
+  secrets:
+    - database_password
+    - encryption_key
+    - invitation_hmac_key
+    - apple_private_key
+    - apns_private_key
+  depends_on:
+    db:
+      condition: service_healthy
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+
+services:
+  db:
+    image: postgres:18.6-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: can
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/database_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [database_admin_password, database_password]
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/010-app-role.sql:ro
+    networks: [data]
+    shm_size: 128mb
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d can"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+
+  api:
+    <<: *backend
+    volumes:
+      - ${CAN_DELETION_JOURNAL_DIR:?Set the private persistent deletion journal directory}:/var/lib/can-deletions:ro
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+
+  worker:
+    <<: *backend
+    volumes:
+      - ${CAN_DELETION_JOURNAL_DIR:?Set the private persistent deletion journal directory}:/var/lib/can-deletions:rw
+    command: [python, -m, can_api.worker]
+    healthcheck:
+      test: [CMD, python, -c, "import pathlib,time; assert 0 <= time.time()-pathlib.Path('/tmp/can-worker-heartbeat').stat().st_mtime < 90"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  migrate:
+    <<: *backend
+    volumes:
+      - ${CAN_DELETION_JOURNAL_DIR:?Set the private persistent deletion journal directory}:/var/lib/can-deletions:ro
+    profiles: [maintenance]
+    restart: "no"
+    command: [alembic, -c, services/api/alembic.ini, upgrade, head]
+
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    environment:
+      CAN_DOMAIN: ${CAN_DOMAIN:?Set the public API IPv4 address or DNS hostname}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, --spider, "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+
+networks:
+  data:
+    internal: true
+  edge: {}
+
+volumes:
+  postgres_data: {}
+  caddy_data: {}
+  caddy_config: {}
+
+secrets:
+  database_admin_password:
+    file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/database_admin_password
+  database_password:
+    file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/database_password
+  encryption_key:
+    file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/encryption_key
+  invitation_hmac_key:
+    file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/invitation_hmac_key
+  apple_private_key:
+    file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/apple_private_key
+  apns_private_key:
+    file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/apns_private_key

@@ -1,0 +1,35 @@
+{
+  "environment": {
+    "python": "3.13.5",
+    "system": "Linux",
+    "swift": "Swift version 6.2.1 (swift-6.2.1-RELEASE)\nTarget: x86_64-unknown-linux-gnu",
+    "PyYAML": "6.0.3",
+    "jsonschema": "4.26.0"
+  },
+  "results": [
+    {
+      "name": "python_arithmetic",
+      "command": "python -m unittest -v test_budget_engine.py",
+      "exit_code": 0,
+      "output": "test_1000_randomized_invariant_scenarios (test_budget_engine.BudgetTests.test_1000_randomized_invariant_scenarios) ... ok\ntest_full_leap_year_366_days (test_budget_engine.BudgetTests.test_full_leap_year_366_days) ... ok\ntest_golden_cases (test_budget_engine.BudgetTests.test_golden_cases) ... ok\ntest_invalid_inputs (test_budget_engine.BudgetTests.test_invalid_inputs) ... ok\ntest_split_topups_independent_of_splitting (test_budget_engine.BudgetTests.test_split_topups_independent_of_splitting) ... ok\ntest_500_revision_invariants (test_budget_engine.RevisionTests.test_500_revision_invariants) ... ok\ntest_invalid_revisions (test_budget_engine.RevisionTests.test_invalid_revisions) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.566s\n\nOK\n"
+    },
+    {
+      "name": "contracts",
+      "command": "python qa/verify_contracts.py",
+      "exit_code": 0,
+      "output": "YAML/JSON parse OK; 246 internal refs resolved; 48 JSON Schema definitions checked; 23 unique operations checked; valid/invalid command samples and projection fixtures validated.\nNOT a full OpenAPI conformance check and NOT a PostgreSQL execution test.\nv1.1 command samples, capacity metadata, revision payload declarations, and calculation version checked.\n"
+    },
+    {
+      "name": "swift_compile",
+      "command": "swiftc reference/BudgetEngine.swift reference/verify.swift -o /mnt/data/_can_work/can_verify_final",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "name": "swift_parity",
+      "command": "/mnt/data/_can_work/can_verify_final reference/golden_cases.json",
+      "exit_code": 0,
+      "output": "Swift: 240 cross-language golden cases passed\n"
+    }
+  ]
+}

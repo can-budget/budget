@@ -1,0 +1,26 @@
+[Unit]
+Description=Encrypted Can database backup to owner off-host storage
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=can-operator
+Group=can-operator
+SupplementaryGroups=docker can-runtime
+WorkingDirectory=/opt/can/current
+# This owner-managed file contains only paths, identifiers and non-secret settings.
+# Credentials themselves are read from separate files by Compose, age and rclone.
+EnvironmentFile=/etc/can/runtime.conf
+ExecStart=/usr/bin/bash /opt/can/current/infra/scripts/backup.sh
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/can-backup /var/lib/can-deletions
+TimeoutStartSec=2h
+
+[Install]
+WantedBy=multi-user.target

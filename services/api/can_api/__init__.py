@@ -1,0 +1,1 @@
+"""Can shared budget service."""

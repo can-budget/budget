@@ -1,0 +1,14 @@
+**
+!services/
+!services/api/
+!services/api/**
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.egg-info/
+**/.env*
+**/*.pem
+**/*.p8
+**/*.key
+services/api/tests/
