@@ -25,8 +25,23 @@ printf '%s\n' "$CAN_DEPLOY_SSH_KEY" >"$temporary/key"
 printf '%s\n' "$CAN_DEPLOY_KNOWN_HOSTS" >"$temporary/known_hosts"
 unset CAN_DEPLOY_SSH_KEY CAN_DEPLOY_KNOWN_HOSTS
 
-# No implicit SSH agent, workstation configuration, host-key discovery or TOFU.
-git archive --format=tar "$GITHUB_SHA" infra | ssh -F /dev/null -T \
+# The credential preamble travels only inside the pinned SSH channel. It is not
+# part of the source archive or the SSH command, and the receiver deletes it.
+# Legacy/manual callers may omit registry auth when the host has its own access.
+{
+  if [[ -n "${CAN_REGISTRY_TOKEN:-}" ]]; then
+    python3 - <<'PY'
+import json
+import os
+import sys
+
+sys.stdout.write("CAN-REGISTRY-AUTH-V1\n")
+sys.stdout.write(json.dumps({"username": os.environ["CAN_REGISTRY_USER"],
+                           "token": os.environ["CAN_REGISTRY_TOKEN"]}) + "\n")
+PY
+  fi
+  git archive --format=tar "$GITHUB_SHA" infra
+} | ssh -F /dev/null -T \
   -p "$port" -i "$temporary/key" \
   -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes \
   -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$temporary/known_hosts" \

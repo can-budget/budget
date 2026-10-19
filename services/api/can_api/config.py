@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     database_user: str = "can"
     database_password_file: str = ""
     environment: str = "production"
+    recovery_mode: Literal["off_host", "single_server"] = "off_host"
     apple_client_id: str = ""
     apple_team_id: str = ""
     apple_key_id: str = ""

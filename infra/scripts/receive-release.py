@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Restricted SSH entry point installed outside the release tree by the owner."""
 
+import base64
 import fcntl
 import hashlib
 import io
+import json
 import os
 import re
 import shutil
@@ -17,6 +19,8 @@ IMAGE = r"ghcr\.io/can-budget/budget-api@sha256:[0-9a-f]{64}"
 COMMAND = re.compile(rf"release ([0-9a-f]{{40}}) ({IMAGE}) ([1-9][0-9]{{0,14}})")
 MAX_BYTES = 16 * 1024 * 1024
 MAX_FILES = 1000
+AUTH_PREFIX = b"CAN-REGISTRY-AUTH-V1\n"
+MAX_AUTH_BYTES = 8192
 REQUIRED = {
     "infra/compose.yaml",
     "infra/caddy/Caddyfile",
@@ -26,6 +30,31 @@ REQUIRED = {
     "infra/scripts/deploy-release.sh",
     "infra/scripts/deploy-release.py",
 }
+
+
+def read_transport(stream) -> tuple[bytes, dict | None]:
+    prefix = stream.read(len(AUTH_PREFIX))
+    credentials = None
+    if prefix == AUTH_PREFIX:
+        line = stream.readline(MAX_AUTH_BYTES + 1)
+        if len(line) > MAX_AUTH_BYTES or not line.endswith(b"\n"):
+            raise ValueError("Invalid registry authentication envelope")
+        try:
+            credentials = json.loads(line)
+            if (
+                not isinstance(credentials, dict)
+                or set(credentials) != {"username", "token"}
+                or not isinstance(credentials["username"], str)
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", credentials["username"])
+                or not isinstance(credentials["token"], str)
+                or not re.fullmatch(r"[A-Za-z0-9_.-]{1,4096}", credentials["token"])
+            ):
+                raise ValueError
+        except (ValueError, TypeError):
+            raise ValueError("Invalid registry authentication envelope") from None
+        prefix = b""
+    payload = prefix + stream.read(MAX_BYTES + 1 - len(prefix))
+    return payload, credentials
 
 
 def unpack(payload: bytes, target: Path) -> None:
@@ -114,7 +143,7 @@ def receive(command: str, stream, root: Path) -> int:
         raise ValueError("Owner must provision the releases directory")
     with (root / ".receive.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        payload = stream.read(MAX_BYTES + 1)
+        payload, credentials = read_transport(stream)
         with tempfile.TemporaryDirectory(prefix=".incoming-", dir=releases) as temporary:
             staging = Path(temporary) / "release"
             staging.mkdir(mode=0o700)
@@ -142,11 +171,27 @@ def receive(command: str, stream, root: Path) -> int:
             "LANG": "C.UTF-8",
             "PYTHONDONTWRITEBYTECODE": "1",
         }
-        return subprocess.run(
-            ["bash", str(destination / "infra/scripts/deploy-release.sh"), sha, image, sequence],
-            env=environment,
-            check=False,
-        ).returncode
+        with tempfile.TemporaryDirectory(prefix=".registry-", dir=root) as registry:
+            if credentials is not None:
+                auth = base64.b64encode(
+                    (credentials["username"] + ":" + credentials["token"]).encode()
+                ).decode()
+                config = Path(registry) / "config.json"
+                descriptor = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "w") as output:
+                    json.dump({"auths": {"ghcr.io": {"auth": auth}}}, output)
+                environment["CAN_RELEASE_DOCKER_CONFIG"] = registry
+            return subprocess.run(
+                [
+                    "bash",
+                    str(destination / "infra/scripts/deploy-release.sh"),
+                    sha,
+                    image,
+                    sequence,
+                ],
+                env=environment,
+                check=False,
+            ).returncode
 
 
 def main() -> int:

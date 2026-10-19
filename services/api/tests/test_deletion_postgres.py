@@ -20,7 +20,8 @@ pytestmark = pytest.mark.postgres
 
 def deletion_request(client, headers, postgres, tmp_path, *, token_count=2):
     cfg = deletions.settings()
-    cfg.deletion_journal_dir = str(tmp_path)
+    if cfg.recovery_mode == "off_host":
+        cfg.deletion_journal_dir = str(tmp_path)
     user = client.get("/v1/me", headers=headers).json()["id"]
     proof = "test-deletion-proof-" + str(uuid4())
     with postgres.begin() as c:
@@ -56,6 +57,50 @@ def acknowledge(postgres, root):
     signed_checkpoint(root, deletions.settings(), records)
     with postgres.begin() as c:
         execute(c, "UPDATE deletion_jobs SET next_attempt_at=now()")
+
+
+def test_single_server_deletion_preserves_money_without_external_journal(
+    postgres, tmp_path, monkeypatch
+):
+    cfg = deletions.settings()
+    cfg.recovery_mode = "single_server"
+    cfg.deletion_journal_dir = ""
+    client, headers, cabinet, sprint, membership = setup_budget(postgres)
+    command = purchase(sprint, membership, 12345)
+    assert (
+        client.post(f"/v1/cabinets/{cabinet}/commands", headers=headers, json=command).status_code
+        == 200
+    )
+    user, proof, body, accepted = deletion_request(
+        client, headers, postgres, tmp_path, token_count=0
+    )
+
+    def unexpected_journal(*args):
+        pytest.fail("Single-server mode must not contact an external journal")
+
+    monkeypatch.setattr(deletions, "publish_and_acknowledged", unexpected_journal)
+    monkeypatch.setattr(deletions, "publish_completed", unexpected_journal)
+    assert deletions.cycle()
+    with postgres.begin() as c:
+        assert one(c, "SELECT id FROM users WHERE id=:id", id=user) is None
+        entry = one(c, "SELECT amount_minor,author_id FROM entries")
+        assert entry["amount_minor"] == 12345 and entry["author_id"] is None
+        job = one(c, "SELECT status,journal_acknowledged_at FROM deletion_jobs")
+        assert job["status"] == "done" and job["journal_acknowledged_at"] is None
+        execute(c, "UPDATE deletion_jobs SET purge_tombstone_after=now()-interval '1 second'")
+    deletions.maintain_retention()
+    with postgres.connect() as c:
+        assert (
+            one(c, "SELECT restore_tombstone_ciphertext FROM deletion_jobs")[
+                "restore_tombstone_ciphertext"
+            ]
+            is None
+        )
+    assert (
+        client.request("DELETE", "/v1/me", headers={"X-Reauth-Token": proof}, json=body).json()
+        == accepted
+    )
+    assert client.get("/health/ready").json()["recovery_mode"] == "single_server"
 
 
 def test_deletion_reauth_immediate_revocation_and_lost_response(postgres, tmp_path, monkeypatch):

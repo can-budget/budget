@@ -15,6 +15,7 @@ x-backend: &backend
   networks: [data, edge]
   environment: &backend-environment
     CAN_ENVIRONMENT: production
+    CAN_RECOVERY_MODE: ${CAN_RECOVERY_MODE:-off_host}
     CAN_DATABASE_HOST: db
     CAN_DATABASE_PORT: "5432"
     CAN_DATABASE_NAME: can
@@ -22,22 +23,22 @@ x-backend: &backend
     CAN_DATABASE_PASSWORD_FILE: /run/secrets/database_password
     CAN_ENCRYPTION_KEY_FILE: /run/secrets/encryption_key
     CAN_INVITATION_HMAC_KEY_FILE: /run/secrets/invitation_hmac_key
-    CAN_APPLE_CLIENT_ID: ${CAN_APPLE_CLIENT_ID:?Set the owner app Bundle ID}
-    CAN_APPLE_TEAM_ID: ${CAN_APPLE_TEAM_ID:?Set the owner Apple Team ID}
-    CAN_APPLE_KEY_ID: ${CAN_APPLE_KEY_ID:?Set the Sign in with Apple key ID}
-    CAN_APPLE_PRIVATE_KEY_FILE: /run/secrets/apple_private_key
-    CAN_APNS_TEAM_ID: ${CAN_APPLE_TEAM_ID:?Set the owner Apple Team ID}
-    CAN_APNS_KEY_ID: ${CAN_APNS_KEY_ID:?Set the APNs key ID}
-    CAN_APNS_PRIVATE_KEY_FILE: /run/secrets/apns_private_key
-    CAN_APNS_APP_TOPIC: ${CAN_APPLE_CLIENT_ID:?Set the owner app Bundle ID}
+    # Provider activation is separate from backend deployment. Empty paths keep
+    # Apple login and push unconfigured; no substitute credentials are created.
+    CAN_APPLE_CLIENT_ID: ${CAN_APPLE_CLIENT_ID:-}
+    CAN_APPLE_TEAM_ID: ${CAN_APPLE_TEAM_ID:-}
+    CAN_APPLE_KEY_ID: ${CAN_APPLE_KEY_ID:-}
+    CAN_APPLE_PRIVATE_KEY_FILE: ${CAN_APPLE_PRIVATE_KEY_FILE:-}
+    CAN_APNS_TEAM_ID: ${CAN_APPLE_TEAM_ID:-}
+    CAN_APNS_KEY_ID: ${CAN_APNS_KEY_ID:-}
+    CAN_APNS_PRIVATE_KEY_FILE: ${CAN_APNS_PRIVATE_KEY_FILE:-}
+    CAN_APNS_APP_TOPIC: ${CAN_APPLE_CLIENT_ID:-}
     CAN_APNS_WIDGET_TOPIC: ${CAN_APNS_WIDGET_TOPIC:-}
     CAN_DELETION_JOURNAL_DIR: /var/lib/can-deletions
   secrets:
     - database_password
     - encryption_key
     - invitation_hmac_key
-    - apple_private_key
-    - apns_private_key
   depends_on:
     db:
       condition: service_healthy
@@ -75,6 +76,7 @@ services:
     <<: *backend
     volumes:
       - ${CAN_DELETION_JOURNAL_DIR:?Set the private persistent deletion journal directory}:/var/lib/can-deletions:ro
+      - ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/providers:/run/provider-secrets:ro
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
       interval: 15s
@@ -86,6 +88,7 @@ services:
     <<: *backend
     volumes:
       - ${CAN_DELETION_JOURNAL_DIR:?Set the private persistent deletion journal directory}:/var/lib/can-deletions:rw
+      - ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/providers:/run/provider-secrets:ro
     command: [python, -m, can_api.worker]
     healthcheck:
       test: [CMD, python, -c, "import pathlib,time; assert 0 <= time.time()-pathlib.Path('/tmp/can-worker-heartbeat').stat().st_mtime < 90"]
@@ -98,6 +101,7 @@ services:
     <<: *backend
     volumes:
       - ${CAN_DELETION_JOURNAL_DIR:?Set the private persistent deletion journal directory}:/var/lib/can-deletions:ro
+      - ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/providers:/run/provider-secrets:ro
     profiles: [maintenance]
     restart: "no"
     command: [alembic, -c, services/api/alembic.ini, upgrade, head]
@@ -148,7 +152,3 @@ secrets:
     file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/encryption_key
   invitation_hmac_key:
     file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/invitation_hmac_key
-  apple_private_key:
-    file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/apple_private_key
-  apns_private_key:
-    file: ${CAN_SECRETS_DIR:?Set the absolute owner-managed secret directory}/apns_private_key

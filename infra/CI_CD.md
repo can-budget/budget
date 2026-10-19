@@ -1,23 +1,29 @@
 # Backend delivery from main
 
-This is an implemented pipeline and an activation runbook. On 2026-10-14 the
-bound GitHub connection and owner-enabled SSH target became available. Server
-access, Docker and the reviewed host-preparation helper were verified successfully.
-The task branch was published through the updated broker's `--json-file` input.
-PR creation returned HTTP 422; remote workflow results remain unverified and the
-application is not deployed. Actual evidence and remaining setup
-are recorded in [IMPLEMENTATION_STATUS.md](../docs/IMPLEMENTATION_STATUS.md).
-iOS delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
+This is the backend pipeline and activation runbook. On 2026-10-19 the current
+main run `39139137737` was inspected: backend, PostgreSQL, unsigned iOS tests and
+GHCR publication succeeded; SSH delivery reached the server but failed its
+bootstrap prerequisites. The server has no runtime configuration, healthy current
+baseline or initialized independent deletion journal. GitHub's production
+environment already contains the dedicated SSH credentials and host variables.
+iOS now has a separate `Verify iOS` workflow and does not gate backend publication
+or deployment. Its delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
+
+The owner's 2026-10-19 decision selects `CAN_RECOVERY_MODE=single_server`: one
+VPS, persistent local PostgreSQL, no backups or external storage. Automatic
+updates still validate source/image identity, serialize releases, migrate forward
+and wait for real health. The backup step and external-journal requirements apply
+only to the optional `off_host` mode. Server loss means losing application data.
 
 ## Branches and normal releases
 
 - Work on `dev` or a feature branch. Pushes and pull requests run verification.
-- Merge reviewed changes into `main`. A push to `main` runs Python/static tests,
-  PostgreSQL integration tests and unsigned iOS build/tests for that same commit.
-- Only after all three jobs pass, GitHub builds a Linux amd64 backend image,
+- Merge reviewed changes into `main`. A push to `main` runs Python/static tests
+  and PostgreSQL integration tests for that same commit.
+- Only after both backend jobs pass, GitHub builds a Linux amd64 backend image,
   publishes it to private GHCR, and deploys its immutable digest to production.
 - The server validates the image's source revision, takes and verifies an
-  encrypted off-host backup, stops API/worker, applies forward migrations, starts
+  encrypted off-host backup only in `off_host` mode, stops API/worker, applies forward migrations, starts
   the new API/worker and checks their health plus public HTTPS readiness.
 - `/opt/can/current` and the successful release record advance only on success.
   There is a short maintenance interruption on this single-server setup.
@@ -27,11 +33,12 @@ receive deployment secrets or publish production images. No path filters silentl
 skip required checks. Changes confined to iOS/docs still run the main pipeline;
 the iPhone binary is **not** uploaded or installed by the backend deployment.
 
-Protect `main` against force pushes and require the `backend`, `postgres` and
-`ios` checks for normal PR merges. Treat workflow/infra changes as privileged.
+Protect `main` against force pushes and require the `backend` and `postgres`
+checks for normal PR merges when repository protection is available. Treat workflow/infra changes as privileged.
 The repository's Actions policy must allow its pinned checkout/setup-python
-actions and GHCR publishing. Branch rules, remote `dev` creation, and environment
-configuration have not been applied by this task.
+actions and GHCR publishing. The independent iOS workflow runs for changes to
+its sources and supports manual dispatch; it has no production secrets.
+Branch protection availability depends on the owner's GitHub plan.
 
 The current HQ connection permits task branches under `agent/`, `work/`,
 `feature/`, `fix/` and `chore/`, plus draft PRs targeting `main`. It does not
@@ -44,19 +51,14 @@ can exceed the operating system's per-argument limit.
 
 ## GitHub configuration
 
-Create an environment named `production`, restricted to branch `main`. To retain
-the requested automatic deployment, do not add a required manual reviewer to
-that environment. The owner must verify the organization's GitHub plan before
-activation: this private organization repository requires GitHub Team or
-Enterprise for environments, environment secrets/variables and deployment-branch
-restrictions. GitHub Free does not provide these features for private repositories;
-a personal Pro subscription does not enable them for an organization's repository.
-See [GitHub's environment availability requirements](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
-
-Keep the workflow's `production` environment requirement until availability is
-confirmed. Workflow conditions alone do not replace environment configuration.
-A repository-secrets alternative without an environment would require a separate
-review of secret access and branch restrictions; it is not implemented here.
+The existing `production` environment is restricted to branch `main` and has no
+manual-review gate. On 2026-10-19 GitHub returned that environment, its branch
+policy, dedicated SSH secret names and host variables; the previous main deploy
+used them successfully to reach the receiver. Keep this environment requirement.
+The organization's API reports plan `free`, and the branch-protection API returns
+HTTP 403. Required PR checks and force-push protection therefore remain outside
+the verified configuration; workflow conditions do not replace branch protection.
+Do not change repository visibility or purchase a plan automatically.
 
 | Environment setting | Type | Value / purpose |
 | --- | --- | --- |
@@ -74,22 +76,23 @@ chat, shell arguments and build logs. GitHub injects it only into the deploy ste
 temporary runner files are removed on exit.
 
 The publish job uses its short-lived `GITHUB_TOKEN` with `packages: write`.
-The deploy job has only `contents: read`; no registry write credential is sent
-to the server. The image is associated with `can-budget/budget` through its OCI
+The deploy job has `contents: read` and `packages: read`; no registry write
+credential is sent to the server. The image is associated with `can-budget/budget` through its OCI
 source label. Keep package visibility private and allow this repository to publish
 the package. For an already existing package, check its Actions access explicitly.
 The bound connection confirms `can-budget/budget` as the repository target.
-`ghcr.io/can-budget/budget-api` is the configured image destination; package
-existence, visibility and Actions access have not yet been verified.
+`ghcr.io/can-budget/budget-api` is verified private and associated with this repo;
+the main publication job succeeded.
 
-For server pulls, configure a separate owner-managed GHCR credential with package
-read permission (`read:packages` PAT classic) and access to this private package.
-Authorize organization SSO if applicable. Supply it through `docker login
---password-stdin` in a trusted owner session; do not put the value in commands or
-in `runtime.conf`. Docker credentials belong to the operating account, outside
-the release tree, with restricted permissions. Set a non-secret `DOCKER_CONFIG`
-path in runtime configuration if necessary. Rotate/revoke the CI SSH key and
-registry token independently.
+For automatic pulls, the sender prefixes the infra archive with a bounded JSON
+envelope containing the deploy job's short-lived, read-only `GITHUB_TOKEN`. It
+travels inside the pinned SSH channel, never in command arguments or the source
+archive. The installed receiver validates the envelope, writes a GHCR-only Docker
+configuration under a private temporary directory (0700/0600), and passes only
+its path to the deployer. Success and failure both remove the configuration.
+No permanent PAT or Docker login is needed on the VPS. Upgrade the root-owned
+receiver to this reviewed version before enabling the updated sender. Legacy
+source-only archives remain supported for owner-managed registry access.
 
 ## One-time VPS preparation
 
@@ -106,8 +109,9 @@ public ACME issuance, no-SNI clients, persistent renewal state and starting the
 production Caddy service before application credentials are available. This
 ingress-only stage does not satisfy the healthy baseline required by CD.
 
-Follow [production operations](README.md) for credentials, PostgreSQL bootstrap,
-deletion-journal initialization, systemd timers and a successful restore drill.
+Follow [production operations](README.md) for credentials and PostgreSQL bootstrap.
+External journals, backup timers and restore drills are not used in the selected
+`single_server` mode.
 The receiver deliberately cannot bootstrap an empty database or invent secrets.
 Have the owner provision:
 
@@ -172,7 +176,7 @@ literal `KEY=value` lines, optional outer quotes, no shell commands, `export`,
 variable expansion or inline comments. Include all non-secret settings from
 the production/backup runbooks, especially `CAN_REPO_DIR=/opt/can/current`, the
 baseline `CAN_RELEASE`, `CAN_IMAGE` digest, `CAN_DOMAIN`, journal and backup paths.
-Set `PYTHONDONTWRITEBYTECODE=1`. The deployer supplies candidate SHA/image itself;
+Set `PYTHONDONTWRITEBYTECODE=1` and `CAN_RECOVERY_MODE=single_server`. The deployer supplies candidate SHA/image itself;
 the old baseline values do not override its selected release. Do not store actual
 database passwords or Apple/registry private keys in this file.
 
@@ -212,7 +216,8 @@ docker compose --project-name can-production --env-file /dev/null -f infra/compo
 curl --fail --silent --show-error "https://$CAN_DOMAIN/health/ready"
 ```
 
-Record a real backup and isolated restore before enabling unattended updates.
+For optional `off_host` mode, record a real backup and isolated restore before
+enabling unattended updates. The selected `single_server` mode skips backups.
 After a healthy baseline, rerun the failed deploy job or make the next reviewed
 main commit. The first successful update creates the release-state records; the
 owner does not hand-write success or sequence markers.

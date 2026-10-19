@@ -4,6 +4,14 @@ This directory targets one owner-controlled production server. The user's later
 instruction supersedes the handoff's permanent staging requirement. Disposable CI
 databases and isolated recovery drills are not permanent staging environments.
 
+On 2026-10-19 the owner explicitly selected **one VPS with no backups** for this
+personal application and accepted rebuilding from scratch after server loss.
+Set `CAN_RECOVERY_MODE=single_server` for this deployment. No backup/journal
+replication timers, external storage or archive restoration are required or
+claimed in this mode. PostgreSQL data remains in its persistent local volume.
+The `off_host` mode and recovery tools below are optional retained capabilities;
+they require an explicit future configuration change and real storage.
+
 These are executable configuration and recovery tools, not evidence of a deployed
 service. Docker, TLS issuance, Apple credentials, live APNs and a real restore
 must be validated on the owner's infrastructure before release.
@@ -36,12 +44,14 @@ interactive environment, without storing them in tracked files:
 | Variable | Meaning |
 | --- | --- |
 | `CAN_RELEASE` | Reviewed source revision / fallback local image tag; keep it stable during recovery |
+| `CAN_RECOVERY_MODE` | Owner-selected `single_server`; `off_host` requires the optional independent backup/journal setup below |
 | `CAN_IMAGE` | Optional immutable GHCR image reference; required by automatic delivery, overrides the local tag |
 | `CAN_DOMAIN` | Public API host without scheme/port/path; current owner choice is `151.243.217.6` |
 | `CAN_SECRETS_DIR` | Absolute owner-managed directory outside the checkout |
 | `CAN_DELETION_JOURNAL_DIR` | Persistent private journal directory, normally `/var/lib/can-deletions` |
-| `CAN_APPLE_CLIENT_ID`, `CAN_APPLE_TEAM_ID`, `CAN_APPLE_KEY_ID` | Owner app Bundle ID, team and Sign in with Apple key identifiers |
-| `CAN_APNS_KEY_ID`, `CAN_APNS_WIDGET_TOPIC` | APNs key identifier; optional verified WidgetKit push topic for supported iOS versions |
+| `CAN_APPLE_CLIENT_ID`, `CAN_APPLE_TEAM_ID`, `CAN_APPLE_KEY_ID` | Optional until Apple activation: owner app Bundle ID, team and Sign in with Apple key identifiers |
+| `CAN_APNS_KEY_ID`, `CAN_APNS_WIDGET_TOPIC` | Optional until Apple activation: APNs key identifier and verified WidgetKit push topic |
+| `CAN_APPLE_PRIVATE_KEY_FILE`, `CAN_APNS_PRIVATE_KEY_FILE` | Optional container paths under `/run/provider-secrets`; leave empty until real provider keys are provisioned |
 
 The runtime reads files in `CAN_SECRETS_DIR`; secret values never belong in shell
 arguments, Git, `.env` files, CI or application logs:
@@ -52,8 +62,26 @@ arguments, Git, `.env` files, CI or application logs:
 | `database_password` | At least 24 random characters for the non-superuser `can` role |
 | `encryption_key` | Fernet key used to decrypt stored credentials; preserve with backups |
 | `invitation_hmac_key` | Independent random invitation lookup key |
-| `apple_private_key` | Owner Sign in with Apple signing key |
-| `apns_private_key` | Separate owner APNs signing key |
+| `providers/apple_private_key` | Owner Sign in with Apple signing key, provisioned during later Apple activation |
+| `providers/apns_private_key` | Separate owner APNs signing key, provisioned during later Apple activation |
+
+Backend deployment and iPhone/Apple activation are independent. Before backend
+startup create the private `CAN_SECRETS_DIR/providers` directory, even when empty.
+Only that provider directory is mounted read-only at `/run/provider-secrets`;
+the database and application keys remain separate per-service secret mounts.
+Use owner `can-operator`, group `can-runtime`, directory mode 0750 and key mode
+0640 so container UID/GID 10001 can read activated provider keys.
+Without Apple identifiers and key paths, real login/push return their existing
+not-configured errors. No fake login or provider key is introduced. Backend
+readiness requires the real database and checks overdue deletion jobs. Only
+`off_host` mode additionally requires the independently replicated journal.
+
+To activate Apple later, provision the real keys in `providers/`, set the owner
+identifiers and set `CAN_APPLE_PRIVATE_KEY_FILE=/run/provider-secrets/apple_private_key`
+and `CAN_APNS_PRIVATE_KEY_FILE=/run/provider-secrets/apns_private_key` in the
+non-secret runtime configuration, then recreate API/worker. Explicitly configured
+missing/unreadable key files fail startup. Existing installations must move their
+provider files into this directory and set these paths before updating.
 
 Provision files via the owner's approved secret delivery mechanism. This repository
 does not generate or contain those values. Keep the host directory inaccessible to
@@ -130,9 +158,12 @@ References: [Let's Encrypt IP certificates](https://letsencrypt.org/2026/01/15/6
 
 ## First authorized deployment
 
-First provision and initialize the independent deletion journal as described below;
-API readiness requires its verified heartbeat. Run from the repository root in an
-environment containing the variables above.
+For the selected single-server deployment set `CAN_RECOVERY_MODE=single_server`;
+do not initialize external journals or enable backup timers. Provision the four
+internal secret files and the empty provider directory. For optional `off_host`
+mode, initialize the independent deletion journal before startup; readiness then
+requires its verified heartbeat. Run from the repository root in an environment
+containing the variables above.
 `--env-file /dev/null` prevents implicit `.env` loading. `config --quiet` checks
 interpolation without dumping settings. An unknown command failure is a stop.
 

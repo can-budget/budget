@@ -59,30 +59,9 @@ jobs:
       - name: PostgreSQL integration tests
         run: make test-postgres
 
-  ios:
-    runs-on: macos-15
-    timeout-minutes: 30
-    env:
-      # The runner default is Xcode 16.4; compile the iOS 26 widget push branch too.
-      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          persist-credentials: false
-      - name: Record SDK versions
-        run: |
-          xcodebuild -version
-          swift --version
-      - name: Swift calculation parity
-        run: make -C Can_Developer_Handoff_v1.1 swift-check
-      - name: Build app and widget without owner credentials
-        run: make ios-build
-      - name: Run app domain and reconciliation tests
-        run: make ios-test
-
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'can-budget/budget'
-    needs: [backend, postgres, ios]
+    needs: [backend, postgres]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -130,6 +109,7 @@ jobs:
     environment: production
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -140,6 +120,8 @@ jobs:
         run: python3 scripts/check_deploy_head.py
       - name: Send release to the restricted production receiver
         env:
+          CAN_REGISTRY_USER: ${{ github.actor }}
+          CAN_REGISTRY_TOKEN: ${{ github.token }}
           CAN_IMAGE: ${{ needs.publish.outputs.image }}
           CAN_DEPLOY_HOST: ${{ vars.CAN_DEPLOY_HOST }}
           CAN_DEPLOY_PORT: ${{ vars.CAN_DEPLOY_PORT }}
