@@ -1,11 +1,11 @@
 # Backend delivery from main
 
-This is the backend pipeline and activation runbook. On 2026-10-19 the current
-main run `39139137737` was inspected: backend, PostgreSQL, unsigned iOS tests and
-GHCR publication succeeded; SSH delivery reached the server but failed its
-bootstrap prerequisites. The server has no runtime configuration, healthy current
-baseline or initialized independent deletion journal. GitHub's production
-environment already contains the dedicated SSH credentials and host variables.
+This is the backend pipeline and activation runbook. The server was bootstrapped
+on 2026-10-19 from source `5a5afd814d567340c93dba58fc940c4312147432` and its
+published GHCR image. PostgreSQL, API, worker and Caddy passed health checks;
+public HTTPS readiness returned 200 with `recovery_mode=single_server`.
+Root-owned runtime configuration and the healthy `current` baseline are present.
+GitHub's production environment contains the dedicated SSH credentials and host variables.
 iOS now has a separate `Verify iOS` workflow and does not gate backend publication
 or deployment. Its delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
 
@@ -40,14 +40,14 @@ actions and GHCR publishing. The independent iOS workflow runs for changes to
 its sources and supports manual dispatch; it has no production secrets.
 Branch protection availability depends on the owner's GitHub plan.
 
-The current HQ connection permits task branches under `agent/`, `work/`,
-`feature/`, `fix/` and `chore/`, plus draft PRs targeting `main`. It does not
-permit direct `main` push/merge or creation of remote `dev`. The owner must create
-`dev` through GitHub or explicitly enable that branch in the connection policy;
-the existing local `dev` is not evidence of a remote branch. The prepared task
-branch `agent/mvp-a31260f0` has been published. Use `hq runner broker git.push
---json-file /tmp/request.json` for a serialized bundle request; positional base64
-can exceed the operating system's per-argument limit.
+The workstation uses the owner's existing GitHub and pinned SSH access. Changes
+are reviewed in task-branch PRs targeting `main`; no remote `dev` branch is needed
+for this one-server deployment. Merging a PR triggers the main pipeline.
+
+Compose validation explicitly enables the `maintenance` profile for both current
+and candidate releases. Without it, real Compose omits `migrate` from the JSON
+configuration, preventing verification that API, worker and migration use the
+same immutable image. Runtime source/image/health checks remain mandatory.
 
 ## GitHub configuration
 
