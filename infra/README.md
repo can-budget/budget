@@ -4,6 +4,14 @@ This directory targets one owner-controlled production server. The user's later
 instruction supersedes the handoff's permanent staging requirement. Disposable CI
 databases and isolated recovery drills are not permanent staging environments.
 
+On 2026-10-19 the owner explicitly selected **one VPS with no backups** for this
+personal application and accepted rebuilding from scratch after server loss.
+Set `CAN_RECOVERY_MODE=single_server` for this deployment. No backup/journal
+replication timers, external storage or archive restoration are required or
+claimed in this mode. PostgreSQL data remains in its persistent local volume.
+The `off_host` mode and recovery tools below are optional retained capabilities;
+they require an explicit future configuration change and real storage.
+
 These are executable configuration and recovery tools, not evidence of a deployed
 service. Docker, TLS issuance, Apple credentials, live APNs and a real restore
 must be validated on the owner's infrastructure before release.
@@ -36,6 +44,7 @@ interactive environment, without storing them in tracked files:
 | Variable | Meaning |
 | --- | --- |
 | `CAN_RELEASE` | Reviewed source revision / fallback local image tag; keep it stable during recovery |
+| `CAN_RECOVERY_MODE` | Owner-selected `single_server`; `off_host` requires the optional independent backup/journal setup below |
 | `CAN_IMAGE` | Optional immutable GHCR image reference; required by automatic delivery, overrides the local tag |
 | `CAN_DOMAIN` | Public API host without scheme/port/path; current owner choice is `151.243.217.6` |
 | `CAN_SECRETS_DIR` | Absolute owner-managed directory outside the checkout |
@@ -64,7 +73,8 @@ Use owner `can-operator`, group `can-runtime`, directory mode 0750 and key mode
 0640 so container UID/GID 10001 can read activated provider keys.
 Without Apple identifiers and key paths, real login/push return their existing
 not-configured errors. No fake login or provider key is introduced. Backend
-readiness still requires the real database and independent deletion journal.
+readiness requires the real database and checks overdue deletion jobs. Only
+`off_host` mode additionally requires the independently replicated journal.
 
 To activate Apple later, provision the real keys in `providers/`, set the owner
 identifiers and set `CAN_APPLE_PRIVATE_KEY_FILE=/run/provider-secrets/apple_private_key`
@@ -148,9 +158,12 @@ References: [Let's Encrypt IP certificates](https://letsencrypt.org/2026/01/15/6
 
 ## First authorized deployment
 
-First provision and initialize the independent deletion journal as described below;
-API readiness requires its verified heartbeat. Run from the repository root in an
-environment containing the variables above.
+For the selected single-server deployment set `CAN_RECOVERY_MODE=single_server`;
+do not initialize external journals or enable backup timers. Provision the four
+internal secret files and the empty provider directory. For optional `off_host`
+mode, initialize the independent deletion journal before startup; readiness then
+requires its verified heartbeat. Run from the repository root in an environment
+containing the variables above.
 `--env-file /dev/null` prevents implicit `.env` loading. `config --quiet` checks
 interpolation without dumping settings. An unknown command failure is a stop.
 

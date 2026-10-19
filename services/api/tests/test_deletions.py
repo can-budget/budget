@@ -332,7 +332,8 @@ def test_journal_health_requires_recent_matching_independent_checkpoint(deletion
 
 
 @pytest.mark.parametrize("overdue", [False, True])
-def test_readiness_checks_deletion_deadline_and_journal(monkeypatch, overdue):
+@pytest.mark.parametrize("mode", ["off_host", "single_server"])
+def test_readiness_checks_deletion_deadline_and_journal(monkeypatch, overdue, mode):
     from contextlib import nullcontext
 
     from can_api import app
@@ -342,6 +343,7 @@ def test_readiness_checks_deletion_deadline_and_journal(monkeypatch, overdue):
             return nullcontext(None)
 
     monkeypatch.setattr(app, "engine", lambda: Database())
+    monkeypatch.setattr(app, "settings", lambda: Settings(recovery_mode=mode))
 
     def query(_connection, sql):
         if "alembic_version" in sql:
@@ -357,5 +359,15 @@ def test_readiness_checks_deletion_deadline_and_journal(monkeypatch, overdue):
             app.ready()
         assert not checked
     else:
-        assert app.ready()["status"] == "ok"
-        assert checked == [True]
+        response = app.ready()
+        assert response["status"] == "ok"
+        assert response["recovery_mode"] == mode
+        assert checked == ([True] if mode == "off_host" else [])
+
+
+@pytest.mark.parametrize("mode", ["", "disabled", "single-server"])
+def test_unknown_recovery_modes_are_rejected(mode):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        Settings(recovery_mode=mode)

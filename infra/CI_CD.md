@@ -9,6 +9,12 @@ environment already contains the dedicated SSH credentials and host variables.
 iOS now has a separate `Verify iOS` workflow and does not gate backend publication
 or deployment. Its delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
 
+The owner's 2026-10-19 decision selects `CAN_RECOVERY_MODE=single_server`: one
+VPS, persistent local PostgreSQL, no backups or external storage. Automatic
+updates still validate source/image identity, serialize releases, migrate forward
+and wait for real health. The backup step and external-journal requirements apply
+only to the optional `off_host` mode. Server loss means losing application data.
+
 ## Branches and normal releases
 
 - Work on `dev` or a feature branch. Pushes and pull requests run verification.
@@ -17,7 +23,7 @@ or deployment. Its delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVE
 - Only after both backend jobs pass, GitHub builds a Linux amd64 backend image,
   publishes it to private GHCR, and deploys its immutable digest to production.
 - The server validates the image's source revision, takes and verifies an
-  encrypted off-host backup, stops API/worker, applies forward migrations, starts
+  encrypted off-host backup only in `off_host` mode, stops API/worker, applies forward migrations, starts
   the new API/worker and checks their health plus public HTTPS readiness.
 - `/opt/can/current` and the successful release record advance only on success.
   There is a short maintenance interruption on this single-server setup.
@@ -103,8 +109,9 @@ public ACME issuance, no-SNI clients, persistent renewal state and starting the
 production Caddy service before application credentials are available. This
 ingress-only stage does not satisfy the healthy baseline required by CD.
 
-Follow [production operations](README.md) for credentials, PostgreSQL bootstrap,
-deletion-journal initialization, systemd timers and a successful restore drill.
+Follow [production operations](README.md) for credentials and PostgreSQL bootstrap.
+External journals, backup timers and restore drills are not used in the selected
+`single_server` mode.
 The receiver deliberately cannot bootstrap an empty database or invent secrets.
 Have the owner provision:
 
@@ -169,7 +176,7 @@ literal `KEY=value` lines, optional outer quotes, no shell commands, `export`,
 variable expansion or inline comments. Include all non-secret settings from
 the production/backup runbooks, especially `CAN_REPO_DIR=/opt/can/current`, the
 baseline `CAN_RELEASE`, `CAN_IMAGE` digest, `CAN_DOMAIN`, journal and backup paths.
-Set `PYTHONDONTWRITEBYTECODE=1`. The deployer supplies candidate SHA/image itself;
+Set `PYTHONDONTWRITEBYTECODE=1` and `CAN_RECOVERY_MODE=single_server`. The deployer supplies candidate SHA/image itself;
 the old baseline values do not override its selected release. Do not store actual
 database passwords or Apple/registry private keys in this file.
 
@@ -209,7 +216,8 @@ docker compose --project-name can-production --env-file /dev/null -f infra/compo
 curl --fail --silent --show-error "https://$CAN_DOMAIN/health/ready"
 ```
 
-Record a real backup and isolated restore before enabling unattended updates.
+For optional `off_host` mode, record a real backup and isolated restore before
+enabling unattended updates. The selected `single_server` mode skips backups.
 After a healthy baseline, rerun the failed deploy job or make the next reviewed
 main commit. The first successful update creates the release-state records; the
 owner does not hand-write success or sequence markers.

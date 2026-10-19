@@ -109,7 +109,8 @@ def request_deletion(c: Connection, body, authorization: str | None, proof: str 
         return replay
     require(body.confirm_shared_history_changes and proof, "deletion_confirmation_required", 422)
     require(
-        settings().deletion_journal_dir and settings().encryption_key,
+        settings().encryption_key
+        and (settings().recovery_mode == "single_server" or settings().deletion_journal_dir),
         "deletion_journal_not_configured",
         503,
         retryable=True,
@@ -144,7 +145,8 @@ def request_deletion(c: Connection, body, authorization: str | None, proof: str 
 def queue_deletion(c: Connection, user: dict, command_id=None, proof_hash=None) -> dict:
     """Trusted entry points are explicit reauthentication or a verified Apple deletion event."""
     require(
-        settings().deletion_journal_dir and settings().encryption_key,
+        settings().encryption_key
+        and (settings().recovery_mode == "single_server" or settings().deletion_journal_dir),
         "deletion_journal_not_configured",
         503,
         retryable=True,
@@ -314,7 +316,17 @@ def revoke_apple_token(record: dict) -> None:
 
 
 def maintain_retention() -> None:
-    """Erase identity-bearing ciphertext only after independently signed backup retirement."""
+    """Expire completed identity ciphertext under the selected recovery policy."""
+    if settings().recovery_mode == "single_server":
+        # This owner-selected mode has no backups or external recovery journal.
+        with engine().begin() as c:
+            execute(
+                c,
+                """UPDATE deletion_jobs SET restore_tombstone_ciphertext=NULL,
+                encryption_key_id=NULL,apple_tokens_ciphertext=NULL
+                WHERE status='done' AND purge_tombstone_after<=now()""",
+            )
+        return
     if not settings().deletion_journal_dir:
         return
     path = Path(settings().deletion_journal_dir) / "checkpoint.json"
@@ -363,7 +375,11 @@ def cycle(*, maintenance: bool = True) -> bool:
         )
     error = None
     try:
-        require(publish_and_acknowledged(job), "deletion_journal_ack_pending", 503, retryable=True)
+        off_host = settings().recovery_mode == "off_host"
+        if off_host:
+            require(
+                publish_and_acknowledged(job), "deletion_journal_ack_pending", 503, retryable=True
+            )
         tombstone = json.loads(decrypt(job["restore_tombstone_ciphertext"]))
         with engine().begin() as c:
             current = one(
@@ -378,8 +394,9 @@ def cycle(*, maintenance: bool = True) -> bool:
                 erase_account(c, tombstone)
                 execute(
                     c,
-                    "UPDATE deletion_jobs SET data_deleted_at=now(),journal_acknowledged_at=now(),user_id=NULL,purge_tombstone_after=now()+interval '30 days' WHERE id=:id",
+                    "UPDATE deletion_jobs SET data_deleted_at=now(),journal_acknowledged_at=:ack,user_id=NULL,purge_tombstone_after=now()+interval '30 days' WHERE id=:id",
                     id=job["id"],
+                    ack=now() if off_host else None,
                 )
         tokens = (
             json.loads(decrypt(job["apple_tokens_ciphertext"]))

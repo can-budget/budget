@@ -8,6 +8,14 @@ Migrations are explicit: `alembic -c services/api/alembic.ini upgrade head`. `up
 
 ## Configuration
 
+The selected deployment uses `CAN_RECOVERY_MODE=single_server` (owner decision
+2026-10-19): no backups or external journal. Database transactions, durable
+deletion jobs, identity erasure and Apple credential revocation remain active.
+Completed deletion ciphertext expires after its retention deadline without
+external backup-retirement checks. No external replication is claimed. The
+default `off_host` mode preserves the independent-journal/recovery behavior
+described below and must be explicitly configured if selected later.
+
 All settings use the `CAN_` prefix. No secret files are bundled.
 
 | Name | Purpose |
@@ -24,7 +32,7 @@ All settings use the `CAN_` prefix. No secret files are bundled.
 
 Inline secret environment variables are also supported for managed secret injection: `APPLE_PRIVATE_KEY`, `ENCRYPTION_KEY`, `INVITATION_HMAC_KEY`, `APNS_PRIVATE_KEY`. The service never reads a dotenv file. Do not put their values in source, command history, issues or logs. Preserve encryption keys securely for restore; replacing an encryption key without re-encrypting existing ciphertext makes those credentials unavailable.
 
-`/health/live` checks process availability. `/health/ready` checks migration revision 0002, pending deletions overdue by 24 hours, and the independently replicated journal checkpoint plus its success heartbeat (maximum age five minutes). Bootstrap the journal publisher before expecting readiness to pass. Readiness does not establish Apple enrollment, valid provider keys, APNs delivery, a signed application or access from the users' networks.
+`/health/live` checks process availability. `/health/ready` checks migration revision 0002 and pending deletions overdue by 24 hours, and reports `recovery_mode`. Only `off_host` mode additionally requires the independently replicated journal checkpoint and its heartbeat (maximum age five minutes). Readiness does not establish Apple enrollment, valid provider keys, APNs delivery, a signed application or access from the users' networks.
 
 ## Transactions and synchronization
 

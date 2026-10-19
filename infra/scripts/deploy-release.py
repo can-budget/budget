@@ -38,6 +38,7 @@ RUNTIME_KEYS = {
     "CAN_RELEASE",
     "CAN_IMAGE",
     "CAN_DOMAIN",
+    "CAN_RECOVERY_MODE",
     "CAN_ACME_EMAIL",
     "CAN_SECRETS_DIR",
     "CAN_APPLE_CLIENT_ID",
@@ -265,17 +266,31 @@ def validate_endpoint_host(host: str) -> None:
 
 
 def prerequisites(runtime: dict[str, str]) -> None:
-    for key in ("CAN_BACKUP_REMOTE", "CAN_DELETION_JOURNAL_REMOTE", "CAN_DOMAIN"):
+    mode = runtime.get("CAN_RECOVERY_MODE", "off_host")
+    if mode not in ("off_host", "single_server"):
+        raise DeployError("Invalid recovery mode")
+    required = (
+        ("CAN_DOMAIN",)
+        if mode == "single_server"
+        else ("CAN_BACKUP_REMOTE", "CAN_DELETION_JOURNAL_REMOTE", "CAN_DOMAIN")
+    )
+    for key in required:
         if not runtime.get(key):
             raise DeployError("Runtime configuration lacks required production settings")
     validate_endpoint_host(runtime["CAN_DOMAIN"])
     if runtime.get("DOCKER_CONFIG"):
         trusted_path(Path(runtime["DOCKER_CONFIG"]), directory=True)
-    for key in ("CAN_SECRETS_DIR", "CAN_DELETION_JOURNAL_DIR", "CAN_BACKUP_DIR"):
+    directories = ("CAN_SECRETS_DIR", "CAN_DELETION_JOURNAL_DIR")
+    if mode == "off_host":
+        directories += ("CAN_BACKUP_DIR",)
+    for key in directories:
         path = Path(runtime.get(key, ""))
         if not path.is_absolute() or not path.is_dir():
             raise DeployError("Owner must provision persistent runtime directories first")
-    for key in ("CAN_BACKUP_RECIPIENTS_FILE", "CAN_RCLONE_CONFIG_FILE", "CAN_ENCRYPTION_KEY_FILE"):
+    files = ("CAN_ENCRYPTION_KEY_FILE",)
+    if mode == "off_host":
+        files += ("CAN_BACKUP_RECIPIENTS_FILE", "CAN_RCLONE_CONFIG_FILE")
+    for key in files:
         path = Path(runtime.get(key, ""))
         if not path.is_absolute() or not path.is_file() or not path.stat().st_size:
             raise DeployError("Owner-managed backup and encryption file paths are required")
@@ -485,12 +500,13 @@ def deploy(
             60,
         )
         # Current tooling and the existing DB are used; the candidate has not changed live services.
-        commands.run(
-            ["bash", str(current / "infra/scripts/backup.sh")],
-            old_env,
-            "verified encrypted off-host backup",
-            7200,
-        )
+        if runtime.get("CAN_RECOVERY_MODE", "off_host") == "off_host":
+            commands.run(
+                ["bash", str(current / "infra/scripts/backup.sh")],
+                old_env,
+                "verified encrypted off-host backup",
+                7200,
+            )
         touched = False
         migration_started = False
         try:
@@ -545,7 +561,11 @@ def deploy(
             for service in ("api", "worker"):
                 inspect_service(commands, candidate, new_env, service, image_id=image_id)
             public_readiness(commands, new_env)
-            completed = {**identity, "completed_at": dt.datetime.now(dt.UTC).isoformat()}
+            completed = {
+                **identity,
+                "recovery_mode": runtime.get("CAN_RECOVERY_MODE", "off_host"),
+                "completed_at": dt.datetime.now(dt.UTC).isoformat(),
+            }
             promote_link(root, sha)
             atomic_json(state_dir / "last-success.json", completed)
             return completed

@@ -5,6 +5,10 @@ v1.1 specification. The current deployment target is **one owner-controlled
 production server**. The later owner instruction removes permanent staging and
 commercial planning from the implementation scope.
 
+The owner's 2026-10-19 decision is one VPS with no backups for this personal app.
+The deployment explicitly uses `CAN_RECOVERY_MODE=single_server`; loss of the VPS
+means loss of application data. Backend CI/CD and iOS builds are independent.
+
 See [implementation and verification status](docs/IMPLEMENTATION_STATUS.md) for
 executed checks and the remaining release work.
 

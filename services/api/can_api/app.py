@@ -106,12 +106,13 @@ def ready():
                 "SELECT id FROM deletion_jobs WHERE status <> 'done' AND requested_at < now()-interval '24 hours' LIMIT 1",
             )
             require(not overdue, "deletion_overdue", 503)
-        from .deletion_journal import check_health
+        if settings().recovery_mode == "off_host":
+            from .deletion_journal import check_health
 
-        check_health()
+            check_health()
     except SQLAlchemyError as exc:
         raise Problem("database_unavailable", 503, retryable=True) from exc
-    return {"status": "ok", "version": "1.1.1"}
+    return {"status": "ok", "version": "1.1.1", "recovery_mode": settings().recovery_mode}
 
 
 @app.post("/v1/cabinets", status_code=201)

@@ -15,6 +15,7 @@ x-backend: &backend
   networks: [data, edge]
   environment: &backend-environment
     CAN_ENVIRONMENT: production
+    CAN_RECOVERY_MODE: ${CAN_RECOVERY_MODE:-off_host}
     CAN_DATABASE_HOST: db
     CAN_DATABASE_PORT: "5432"
     CAN_DATABASE_NAME: can

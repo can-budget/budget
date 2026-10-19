@@ -207,6 +207,30 @@ def test_success_backs_up_before_migration_and_promotes_only_healthy_image(setup
     )
 
 
+def test_explicit_single_server_deploy_needs_no_backup_storage_or_backup_commands(setup):
+    setup.runtime["CAN_RECOVERY_MODE"] = "single_server"
+    for key in (
+        "CAN_BACKUP_REMOTE",
+        "CAN_DELETION_JOURNAL_REMOTE",
+        "CAN_BACKUP_DIR",
+        "CAN_BACKUP_RECIPIENTS_FILE",
+        "CAN_RCLONE_CONFIG_FILE",
+    ):
+        setup.runtime.pop(key)
+    result = invoke(setup)
+    assert result["recovery_mode"] == "single_server"
+    assert "verified encrypted off-host backup" not in stages(setup)
+    assert "forward schema migration" in stages(setup)
+    assert stages(setup)[-1] == "verify public HTTPS readiness"
+
+
+def test_invalid_recovery_mode_stops_before_any_deployment_command(setup):
+    setup.runtime["CAN_RECOVERY_MODE"] = "disabled"
+    with pytest.raises(release.DeployError, match="Invalid recovery mode"):
+        invoke(setup)
+    assert not setup.commands.calls
+
+
 @pytest.mark.parametrize(
     "stage",
     [
