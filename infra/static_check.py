@@ -15,6 +15,7 @@ def main() -> None:
     restore = yaml.safe_load((ROOT / "infra/compose.restore.yaml").read_text())
     ingress = yaml.safe_load((ROOT / "infra/compose.ingress.yaml").read_text())
     workflow = yaml.safe_load((ROOT / ".github/workflows/verify.yml").read_text())
+    ios_workflow = yaml.safe_load((ROOT / ".github/workflows/ios.yml").read_text())
     assert compose["name"] == "can-production"
     assert compose["networks"]["data"]["internal"] is True
     assert set(compose["services"]) == {"db", "api", "worker", "migrate", "caddy"}
@@ -42,10 +43,26 @@ def main() -> None:
             if any(
                 token in key for token in ("PASSWORD", "ENCRYPTION_KEY", "HMAC_KEY", "PRIVATE_KEY")
             ):
-                assert key.endswith("_FILE") and str(value).startswith("/run/secrets/")
+                assert key.endswith("_FILE")
+                if key in ("CAN_APPLE_PRIVATE_KEY_FILE", "CAN_APNS_PRIVATE_KEY_FILE"):
+                    assert value == "${" + key + ":-}"
+                else:
+                    assert str(value).startswith("/run/secrets/")
         journal_mounts = [mount for mount in service["volumes"] if "can-deletions" in str(mount)]
         assert len(journal_mounts) == 1
         assert str(journal_mounts[0]).endswith(":ro") is (name == "api")
+        assert any(
+            str(mount).endswith("/providers:/run/provider-secrets:ro")
+            for mount in service["volumes"]
+        )
+        assert not {"apple_private_key", "apns_private_key"} & set(service["secrets"])
+        for key in (
+            "CAN_APPLE_CLIENT_ID",
+            "CAN_APPLE_TEAM_ID",
+            "CAN_APPLE_KEY_ID",
+            "CAN_APNS_KEY_ID",
+        ):
+            assert service["environment"][key] == "${" + key + ":-}"
     for secret in compose["secrets"].values():
         assert set(secret) == {"file"} and "${CAN_SECRETS_DIR:?" in secret["file"]
     assert set(restore["services"]) == {"restore-db"}
@@ -56,17 +73,25 @@ def main() -> None:
     assert workflow["concurrency"]["cancel-in-progress"] == "${{ github.ref != 'refs/heads/main' }}"
     publish = workflow["jobs"]["publish"]
     deploy = workflow["jobs"]["deploy"]
-    assert set(publish["needs"]) == {"backend", "postgres", "ios"}
+    assert set(publish["needs"]) == {"backend", "postgres"}
+    assert "ios" not in workflow["jobs"]
+    assert ios_workflow["permissions"] == {"contents": "read"}
+    assert set(ios_workflow["jobs"]) == {"ios"}
+    assert "environment" not in ios_workflow["jobs"]["ios"]
     assert publish["permissions"] == {"contents": "read", "packages": "write"}
     assert deploy["needs"] == "publish"
-    assert deploy["permissions"] == {"contents": "read"}
+    assert deploy["permissions"] == {"contents": "read", "packages": "read"}
+    transport = next(
+        step for step in deploy["steps"] if step.get("run") == "bash infra/scripts/send-release.sh"
+    )
+    assert transport["env"]["CAN_REGISTRY_TOKEN"] == "${{ github.token }}"
     assert deploy["environment"] == "production"
     for job in (publish, deploy):
         assert job["if"] == (
             "github.event_name == 'push' && github.ref == 'refs/heads/main' "
             "&& github.repository == 'can-budget/budget'"
         )
-    for job in workflow["jobs"].values():
+    for job in [*workflow["jobs"].values(), *ios_workflow["jobs"].values()]:
         for step in job["steps"]:
             if "uses" in step:
                 assert re.fullmatch(r"[\w/-]+@[0-9a-f]{40}", step["uses"])

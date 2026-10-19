@@ -17,6 +17,7 @@ executed checks and the remaining release work.
 | `contracts/` | Active API contract and documented transport clarifications |
 | `infra/` | Production Compose, HTTPS, encrypted backup and isolated restore tools |
 | `.github/workflows/verify.yml` | Verification on pushes/PRs; main-only image publication and backend deployment |
+| `.github/workflows/ios.yml` | Independent unsigned iOS build/tests; does not gate backend deployment |
 | `Can_Developer_Handoff_v1.1/` | Unmodified source specification, acceptance criteria and calculation fixtures |
 
 No categories, bank integrations, administrator role, alternative login or
@@ -61,7 +62,10 @@ configuration instructions before running against your server.
 For API development, configure an authorized PostgreSQL database and the required
 `CAN_*` settings from `services/api/can_api/config.py`, apply the reviewed Alembic
 migration to that database, then run `make dev`. Real Apple login requires owner
-credentials. There is no fake-login route or seeded runtime budget.
+credentials. Backend infrastructure can start before Apple activation; provider
+settings remain empty and login/push are unavailable until real keys are added.
+See the optional provider configuration in `infra/README.md`. There is no
+fake-login route or seeded runtime budget.
 
 Follow [production operations](infra/README.md) for the single-server deployment,
 credential-file mounts, first migration, updates, backup and isolated recovery.

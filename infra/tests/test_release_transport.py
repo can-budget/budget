@@ -2,6 +2,7 @@
 
 import importlib.util
 import io
+import json
 import os
 import subprocess
 import tarfile
@@ -221,3 +222,69 @@ def test_send_transport_refuses_shell_content_without_ssh(tmp_path):
     )
     assert result.returncode == 64
     assert b"synthetic-test-value" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_registry_credential_is_scoped_private_and_removed_after_deploy(deployment, exit_code):
+    root, run = deployment
+    credentials = {"username": "test-owner", "token": "test-only-registry-token"}
+    envelope = receiver.AUTH_PREFIX + json.dumps(credentials).encode() + b"\n"
+    observed = []
+
+    def deploy(*args, env, **kwargs):
+        directory = Path(env["CAN_RELEASE_DOCKER_CONFIG"])
+        path = directory / "config.json"
+        assert directory.stat().st_mode & 0o777 == 0o700
+        assert path.stat().st_mode & 0o777 == 0o600
+        content = json.loads(path.read_text())
+        assert set(content["auths"]) == {"ghcr.io"}
+        assert "test-only-registry-token" not in str(args) + str(env)
+        observed.append(directory)
+        return subprocess.CompletedProcess(args, exit_code)
+
+    run.side_effect = deploy
+    assert (
+        receiver.receive(f"release {SHA} {IMAGE} 10", io.BytesIO(envelope + archive()), root)
+        == exit_code
+    )
+    assert observed and not observed[0].exists()
+    assert not list((root / "releases").rglob("config.json"))
+
+
+@pytest.mark.parametrize(
+    "credentials",
+    [
+        [],
+        {},
+        {"username": "test-owner", "token": "x", "extra": "value"},
+        {"username": "user:password", "token": "x"},
+        {"username": "test-owner", "token": "x\nheader"},
+        {"username": "test-owner", "token": "x" * 4097},
+        {"username": "test-owner", "token": None},
+    ],
+)
+def test_invalid_registry_envelope_cannot_start_deployment(deployment, credentials):
+    root, run = deployment
+    envelope = receiver.AUTH_PREFIX + json.dumps(credentials).encode() + b"\n"
+    with pytest.raises(ValueError, match="authentication envelope"):
+        receiver.receive(f"release {SHA} {IMAGE} 10", io.BytesIO(envelope + archive()), root)
+    run.assert_not_called()
+    assert not (root / "releases" / SHA).exists()
+
+
+@pytest.mark.parametrize("line", [b"x" * 8193 + b"\n", b'{"username":"owner"}'])
+def test_unbounded_or_unterminated_registry_envelope_is_refused(deployment, line):
+    root, run = deployment
+    with pytest.raises(ValueError, match="authentication envelope"):
+        receiver.receive(f"release {SHA} {IMAGE} 10", io.BytesIO(receiver.AUTH_PREFIX + line), root)
+    run.assert_not_called()
+
+
+def test_registry_configuration_is_removed_when_deploy_cannot_start(deployment):
+    root, run = deployment
+    credentials = {"username": "test-owner", "token": "test-only-registry-token"}
+    envelope = receiver.AUTH_PREFIX + json.dumps(credentials).encode() + b"\n"
+    run.side_effect = OSError("synthetic process-start failure")
+    with pytest.raises(OSError):
+        receiver.receive(f"release {SHA} {IMAGE} 10", io.BytesIO(envelope + archive()), root)
+    assert not list(root.glob(".registry-*"))

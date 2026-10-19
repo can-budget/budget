@@ -1,0 +1,46 @@
+name: Verify iOS
+
+on:
+  pull_request:
+    paths:
+      - 'apps/ios/**'
+      - 'Can_Developer_Handoff_v1.1/reference/**'
+      - 'infra/scripts/ios-test.sh'
+      - 'Makefile'
+      - '.github/workflows/ios.yml'
+  push:
+    paths:
+      - 'apps/ios/**'
+      - 'Can_Developer_Handoff_v1.1/reference/**'
+      - 'infra/scripts/ios-test.sh'
+      - 'Makefile'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Record SDK versions
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Swift calculation parity
+        run: make -C Can_Developer_Handoff_v1.1 swift-check
+      - name: Build app and widget without owner credentials
+        run: make ios-build
+      - name: Run app domain and reconciliation tests
+        run: make ios-test

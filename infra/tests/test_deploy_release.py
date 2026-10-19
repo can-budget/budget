@@ -408,6 +408,22 @@ def test_environment_does_not_forward_client_docker_or_python_overrides(setup, m
     assert result["CAN_IMAGE"] == IMAGE
 
 
+def test_runtime_accepts_provider_file_paths_but_rejects_inline_credentials(tmp_path):
+    path = tmp_path / "runtime.conf"
+    path.write_text(
+        "CAN_APPLE_PRIVATE_KEY_FILE=/run/provider-secrets/apple_private_key\n"
+        "CAN_APNS_PRIVATE_KEY_FILE=/run/provider-secrets/apns_private_key\n"
+    )
+    path.chmod(0o600)
+    parsed = release.load_runtime(path, owner=os.getuid())
+    assert parsed["CAN_APPLE_PRIVATE_KEY_FILE"] == "/run/provider-secrets/apple_private_key"
+    assert parsed["CAN_APNS_PRIVATE_KEY_FILE"] == "/run/provider-secrets/apns_private_key"
+    for key in ("CAN_APPLE_PRIVATE_KEY", "CAN_APNS_PRIVATE_KEY"):
+        path.write_text(f"{key}=test-only-value\n")
+        with pytest.raises(release.DeployError):
+            release.load_runtime(path, owner=os.getuid())
+
+
 def test_private_subprocess_output_never_appears_in_deploy_error(monkeypatch):
     def fake_run(*args, **kwargs):
         return SimpleNamespace(

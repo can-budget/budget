@@ -40,8 +40,9 @@ interactive environment, without storing them in tracked files:
 | `CAN_DOMAIN` | Public API host without scheme/port/path; current owner choice is `151.243.217.6` |
 | `CAN_SECRETS_DIR` | Absolute owner-managed directory outside the checkout |
 | `CAN_DELETION_JOURNAL_DIR` | Persistent private journal directory, normally `/var/lib/can-deletions` |
-| `CAN_APPLE_CLIENT_ID`, `CAN_APPLE_TEAM_ID`, `CAN_APPLE_KEY_ID` | Owner app Bundle ID, team and Sign in with Apple key identifiers |
-| `CAN_APNS_KEY_ID`, `CAN_APNS_WIDGET_TOPIC` | APNs key identifier; optional verified WidgetKit push topic for supported iOS versions |
+| `CAN_APPLE_CLIENT_ID`, `CAN_APPLE_TEAM_ID`, `CAN_APPLE_KEY_ID` | Optional until Apple activation: owner app Bundle ID, team and Sign in with Apple key identifiers |
+| `CAN_APNS_KEY_ID`, `CAN_APNS_WIDGET_TOPIC` | Optional until Apple activation: APNs key identifier and verified WidgetKit push topic |
+| `CAN_APPLE_PRIVATE_KEY_FILE`, `CAN_APNS_PRIVATE_KEY_FILE` | Optional container paths under `/run/provider-secrets`; leave empty until real provider keys are provisioned |
 
 The runtime reads files in `CAN_SECRETS_DIR`; secret values never belong in shell
 arguments, Git, `.env` files, CI or application logs:
@@ -52,8 +53,25 @@ arguments, Git, `.env` files, CI or application logs:
 | `database_password` | At least 24 random characters for the non-superuser `can` role |
 | `encryption_key` | Fernet key used to decrypt stored credentials; preserve with backups |
 | `invitation_hmac_key` | Independent random invitation lookup key |
-| `apple_private_key` | Owner Sign in with Apple signing key |
-| `apns_private_key` | Separate owner APNs signing key |
+| `providers/apple_private_key` | Owner Sign in with Apple signing key, provisioned during later Apple activation |
+| `providers/apns_private_key` | Separate owner APNs signing key, provisioned during later Apple activation |
+
+Backend deployment and iPhone/Apple activation are independent. Before backend
+startup create the private `CAN_SECRETS_DIR/providers` directory, even when empty.
+Only that provider directory is mounted read-only at `/run/provider-secrets`;
+the database and application keys remain separate per-service secret mounts.
+Use owner `can-operator`, group `can-runtime`, directory mode 0750 and key mode
+0640 so container UID/GID 10001 can read activated provider keys.
+Without Apple identifiers and key paths, real login/push return their existing
+not-configured errors. No fake login or provider key is introduced. Backend
+readiness still requires the real database and independent deletion journal.
+
+To activate Apple later, provision the real keys in `providers/`, set the owner
+identifiers and set `CAN_APPLE_PRIVATE_KEY_FILE=/run/provider-secrets/apple_private_key`
+and `CAN_APNS_PRIVATE_KEY_FILE=/run/provider-secrets/apns_private_key` in the
+non-secret runtime configuration, then recreate API/worker. Explicitly configured
+missing/unreadable key files fail startup. Existing installations must move their
+provider files into this directory and set these paths before updating.
 
 Provision files via the owner's approved secret delivery mechanism. This repository
 does not generate or contain those values. Keep the host directory inaccessible to

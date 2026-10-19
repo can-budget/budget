@@ -43,7 +43,9 @@ RUNTIME_KEYS = {
     "CAN_APPLE_CLIENT_ID",
     "CAN_APPLE_TEAM_ID",
     "CAN_APPLE_KEY_ID",
+    "CAN_APPLE_PRIVATE_KEY_FILE",
     "CAN_APNS_KEY_ID",
+    "CAN_APNS_PRIVATE_KEY_FILE",
     "CAN_APNS_WIDGET_TOPIC",
     "CAN_BACKUP_DIR",
     "CAN_BACKUP_RECIPIENTS_FILE",
@@ -578,6 +580,12 @@ def main() -> None:
     try:
         validate_identity(args.source_sha, args.image, args.run_number)
         runtime = load_runtime(Path("/etc/can/runtime.conf"))
+        registry = os.environ.get("CAN_RELEASE_DOCKER_CONFIG")
+        if registry:
+            registry_path = Path(registry)
+            trusted_path(registry_path, directory=True, owner=os.getuid())
+            trusted_path(registry_path / "config.json", owner=os.getuid())
+            runtime["DOCKER_CONFIG"] = registry
         root = Path(runtime.get("CAN_DEPLOY_ROOT", "/opt/can"))
         result = deploy(
             args.source_sha,
