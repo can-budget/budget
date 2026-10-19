@@ -455,14 +455,14 @@ def deploy(
         no_existing_migration(commands, new_env)
         before = json.loads(
             commands.run(
-                compose(current) + ["config", "--format", "json"],
+                compose(current) + ["--profile", "maintenance", "config", "--format", "json"],
                 old_env,
                 "validate current Compose",
             )
         )
         after = json.loads(
             commands.run(
-                compose(candidate) + ["config", "--format", "json"],
+                compose(candidate) + ["--profile", "maintenance", "config", "--format", "json"],
                 new_env,
                 "validate candidate Compose",
             )

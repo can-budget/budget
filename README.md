@@ -73,11 +73,14 @@ fake-login route or seeded runtime budget.
 
 Follow [production operations](infra/README.md) for the single-server deployment,
 credential-file mounts, first migration, updates, backup and isolated recovery.
-Follow [backend CI/CD activation](infra/CI_CD.md) for `dev` checks and automatic
+Follow [backend CI/CD activation](infra/CI_CD.md) for branch checks and automatic
 `main` deployment. The owner selected `https://151.243.217.6` without a purchased
-domain. Public HTTPS ingress is running; the application still requires Apple
-credentials, independent backup storage and its first database bootstrap.
-GitHub deployment settings and the successful main workflow remain unverified.
+domain. On 2026-10-19 PostgreSQL, API, worker and Caddy were started and verified
+healthy; the public readiness endpoint returned 200 with `recovery_mode=single_server`.
+Database schema revision is 0002. No backups or external storage are configured,
+as explicitly selected by the owner. Apple login and APNs remain unconfigured
+until the separate owner enrollment/key setup. Current automation results are
+available in the repository's `Verify and deploy` workflow.
 Keep credentials outside the repository. Follow [iOS instructions](apps/ios/README.md)
 for owner signing and [two-phone delivery](docs/IOS_DELIVERY.md) for manual
 TestFlight/Ad Hoc choices and their expiry requirements. Use the original
@@ -90,7 +93,7 @@ Passing Python/static checks does not prove PostgreSQL concurrency, an Xcode
 build, signing, APNs delivery, TestFlight installation or a successful live
 restore. The approved account-deletion policy preserves shared operations,
 amounts and dates while removing the deleted account's identity links. Deletion
-uses a durable job, Apple credential revocation and an independently replicated
-recovery journal. A 202 response means accepted, not completed. The journal timer,
-backup retention and recovery procedure are part of the required production
-configuration; follow the operations instructions before enabling real use.
+uses a durable job and Apple credential revocation. A 202 response means accepted,
+not completed. In the selected `single_server` mode the database is the only
+durable store, and no backup or external-journal guarantee is made. Independent
+recovery tooling is retained only for a future explicit switch to `off_host` mode.

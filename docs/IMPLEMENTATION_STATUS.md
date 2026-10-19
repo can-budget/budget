@@ -1,4 +1,47 @@
-# Implementation verification — 2026-10-17
+# Implementation and deployment verification
+
+## Backend activation — 2026-10-19
+
+The owner explicitly selected one VPS with no backups or external storage for
+this personal application and accepted rebuilding after server loss. Production
+uses `CAN_RECOVERY_MODE=single_server`; external backup/journal timers are absent.
+Apple enrollment, provider keys and iPhone delivery remain a separate stage.
+
+Observed first healthy backend baseline:
+
+- Source: `5a5afd814d567340c93dba58fc940c4312147432`, merged PR #2.
+- Published image: `ghcr.io/can-budget/budget-api@sha256:a7eb291c1cd6c99065563e499ef42fbfa44489dc473211ba778b718d93884851`.
+  Its Linux amd64/source identity was verified, then it was loaded over pinned
+  SSH without storing a permanent registry credential on the VPS.
+- The real PostgreSQL schema was bootstrapped to revision 0002. No user or
+  financial fixture was seeded; the initial user count was zero.
+- `can-production-db-1`, `api-1`, `worker-1` and `caddy-1` all reported healthy.
+- Public HTTPS from the workstation returned 200 at `/health/ready` with
+  `status=ok` and `recovery_mode=single_server`. PostgreSQL and API have no
+  directly published host ports. Docker is enabled for startup.
+- Runtime configuration is root-owned, readable by `can-operator` and contains
+  paths/non-secret settings only. Existing internal keys were preserved.
+- Backend and iOS verification are separate workflows. Backend publication is
+  gated by API/static checks and real disposable PostgreSQL tests.
+- Local verification passed 299 API unit tests, reference/contracts/static checks,
+  and 178 infrastructure tests after the Compose-profile regression was added.
+  Main CI passed all 19 PostgreSQL cases, including single-server deletion,
+  preservation of money/history, exact accepted retries and retention cleanup.
+
+The first update attempt exposed that real Compose excludes inactive profile
+services from `config`. Validation now explicitly enables `maintenance` so it
+can inspect `migrate`; the regression test rejects a migration image mismatch
+before any pull or service stop. Current automatic delivery results are recorded
+in the repository's `Verify and deploy` workflow. Initial bootstrap and a
+successful automatic update are distinct evidence.
+
+In this mode readiness still checks schema and overdue deletion jobs; durable
+erasure preserves financial facts and removes identity without claiming an
+independently replicated journal. The legacy 30-day deletion response is an upper
+retention bound, not a claim that backups exist. The optional `off_host` behavior
+remains the application default until an operator explicitly selects a mode.
+
+## Historical implementation report — 2026-10-17
 
 This report describes the current working checkout, not a deployed release.
 The owner's current scope is personal/family use with one production server.
