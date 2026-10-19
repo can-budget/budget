@@ -76,6 +76,9 @@ class FakeCommands:
                 "volumes": {"postgres_data": {}},
                 "secrets": {"encryption_key": {"file": "/owner/encryption_key"}},
             }
+            # Real Compose excludes inactive profile services from `config`.
+            if "--profile" not in args:
+                del result["services"]["migrate"]
             if stage == "validate candidate Compose" and self.candidate_mutation:
                 self.candidate_mutation(result)
             return json.dumps(result)
@@ -229,6 +232,17 @@ def test_invalid_recovery_mode_stops_before_any_deployment_command(setup):
     with pytest.raises(release.DeployError, match="Invalid recovery mode"):
         invoke(setup)
     assert not setup.commands.calls
+
+
+def test_profiled_migration_image_is_validated_before_pulling_or_stopping_services(setup):
+    def change_migration(config):
+        config["services"]["migrate"]["image"] = "can-api:unreviewed"
+
+    setup.commands.candidate_mutation = change_migration
+    with pytest.raises(release.DeployError, match="one immutable image"):
+        invoke(setup)
+    assert "pull reviewed image" not in stages(setup)
+    assert "stop backend writes" not in stages(setup)
 
 
 @pytest.mark.parametrize(
