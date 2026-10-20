@@ -846,8 +846,9 @@ def test_policy_migration_preserves_past_days_closed_sprints_and_entry_amounts(p
         prior_day = projection_data(c, before, yesterday)["projection"]
         prior_bank = projection_data(c, before, today)["projection"]["bank_minor"]
         migration.attributes["connection"] = c
-        command.upgrade(migration, "head")
-        command.upgrade(migration, "head")
+        # This fixture reverses only policy 0003, not subsequent schema migrations.
+        command.upgrade(migration, "0003")
+        command.upgrade(migration, "0003")
         after = one(c, "SELECT * FROM sprints WHERE id=:id", id=active)
         assert after["calculation_version"] == 3
         assert after["topups_today_from"] == today
