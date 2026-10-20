@@ -1,5 +1,21 @@
 # Implementation and deployment verification
 
+## Live calculator and same-day topups — 2026-10-20
+
+The owner approved a live draft preview, full-area Enter button, removal of the
+approximately-equal glyph, and full same-day topups. Version 3 records a per-sprint
+cutoff, preserving version-2 arithmetic for earlier days and closed legacy sprints.
+Migration 0003 advances active cabinets once without rewriting entries or amounts.
+The owner explicitly authorized the migration, GitHub publication and production
+CI/CD deployment after checks. Deployment results will be recorded after CI.
+
+Local checks passed: 44 XCTest methods (240 immutable original fixtures plus
+12 shared v3 examples), 313 API unit tests, 186 infrastructure tests and all
+contract/static checks. 21 PostgreSQL cases are delegated to disposable CI.
+A temporary native XCUITest exercised nine points across the actual Enter
+component and verified that a disabled control does not submit. No production
+financial record was created by those tests.
+
 ## Backend activation — 2026-10-19
 
 The owner explicitly selected one VPS with no backups or external storage for

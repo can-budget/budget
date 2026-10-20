@@ -2,57 +2,61 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
-    @State private var displayName = ""
-    @State private var cabinetName = ""
     @State private var busy = false
     @State private var editSprint = false
     @State private var showInvitation = false
+    @State private var renaming = false
     @State private var leaving = false
-    @State private var loggingOut = false
-    @State private var deleting = false
     @State private var privacy = false
     var body: some View {
-        Form {
-            Section("Вы") {
-                TextField("Имя", text: $displayName).onChange(of: displayName) { _, v in displayName = String(v.prefix(40)) }
-                AsyncButton("Сохранить имя", busy: $busy) { try await store.renameProfile(displayName) }.disabled(displayName.isEmpty)
-            }
+        List {
             if let snapshot = store.snapshot {
-                Section("Кабинет") {
-                    TextField("Название", text: $cabinetName).onChange(of: cabinetName) { _, v in cabinetName = String(v.prefix(40)) }
-                    AsyncButton("Сохранить название", busy: $busy) {
-                        _ = try await store.onlineCommand("rename_cabinet", payload: ["name": .string(cabinetName), "expected_cabinet_revision": .integer(snapshot.cabinet_revision)])
-                    }.disabled(cabinetName.isEmpty)
-                    LabeledContent("Участники", value: "\(snapshot.cabinet.members.count) из 10")
-                    ForEach(snapshot.cabinet.members) { member in Text(member.display_name) }
+                Section {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(snapshot.cabinet.name).font(.largeTitle.weight(.semibold)).tracking(-0.7)
+                        Text("\(snapshot.cabinet.members.count) из 10 участников · равные права")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }.padding(.vertical, 16)
+                }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+                Section {
+                    NavigationLink("Участники", destination: MembersView())
                     if snapshot.cabinet.members.count < 10 {
                         AsyncButton("Пригласить", busy: $busy) {
                             _ = try await store.onlineCommand("create_invitation", payload: [:])
                             showInvitation = store.invitation != nil
                         }
                     }
-                    if store.projection?.status == "active" { Button("Изменить остаток и срок") { editSprint = true } }
-                    NavigationLink("Архив спринтов", destination: ArchiveView())
+                    Button("Название") { renaming = true }.foregroundStyle(.primary)
+                }
+                Section("Бюджет") {
+                    Button("Сумма и срок") { editSprint = true }.foregroundStyle(.primary)
+                    NavigationLink("Прошлые бюджеты", destination: ArchiveView())
+                    NavigationLink(destination: QueueView()) {
+                        HStack { Text("Синхронизация"); Spacer(); Text(store.offline ? "Нет связи" : store.totalPendingCount > 0 ? "\(store.totalPendingCount) в очереди" : "").font(.caption).foregroundStyle(.secondary) }
+                    }
                 }
             }
-            Section {
-                NavigationLink("Синхронизация · \(store.totalPendingCount)", destination: QueueView())
-                if !store.previousLocalAccounts.isEmpty {
-                    NavigationLink("Прежние данные на этом iPhone", destination: PreviousLocalDataView())
-                }
-                Button("О данных и приватности") { privacy = true }
-                LabeledContent("Версия", value: "\(AppConfiguration.value("CFBundleShortVersionString")) (\(AppConfiguration.value("CFBundleVersion")))")
+            Section("Личное") {
+                NavigationLink("Профиль", destination: ProfileView())
+                if !store.previousLocalAccounts.isEmpty { NavigationLink("Прежние данные на этом iPhone", destination: PreviousLocalDataView()) }
+                Button("Об использовании данных") { privacy = true }.foregroundStyle(.primary)
+                LabeledContent("Версия", value: "\(AppConfiguration.value("CFBundleShortVersionString")) (\(AppConfiguration.value("CFBundleVersion")))").foregroundStyle(.secondary).font(.footnote)
             }
-            Section {
-                if store.user?.active_cabinet_id != nil { Button("Выйти из кабинета", role: .destructive) { leaving = true } }
-                Button("Выйти из аккаунта", role: .destructive) { loggingOut = true }
-                NavigationLink("Удалить аккаунт", destination: DeletionView())
-            } footer: { Text("Выход из кабинета сохраняет общую финансовую историю. Выход из аккаунта не удаляет аккаунт.") }
-        }.navigationTitle("Настройки").toolbar(.visible, for: .navigationBar)
-            .onAppear { displayName = store.user?.display_name ?? ""; cabinetName = store.snapshot?.cabinet.name ?? "" }
-            .sheet(isPresented: $editSprint) { SprintEditor(editing: true) }
+            if store.user?.active_cabinet_id != nil {
+                Section {
+                    Button("Выйти из кабинета", role: .destructive) { leaving = true }
+                } footer: { Text("Ваши операции останутся в общей истории.") }
+            }
+        }.listStyle(.plain).canScreen().navigationTitle("Кабинет")
+            .sheet(isPresented: $editSprint) { SprintEditor(editing: store.projection?.status == "active") }
             .sheet(isPresented: $showInvitation) { if let invitation = store.invitation { InvitationView(invitation: invitation) } }
             .sheet(isPresented: $privacy) { PrivacyView() }
+            .sheet(isPresented: $renaming) {
+                NameEditor(title: "Название кабинета", initial: store.snapshot?.cabinet.name ?? "") { name in
+                    guard let snapshot = store.snapshot else { throw APIError.local("Откройте кабинет ещё раз.") }
+                    _ = try await store.onlineCommand("rename_cabinet", payload: ["name": .string(name), "expected_cabinet_revision": .integer(snapshot.cabinet_revision)])
+                }
+            }
             .confirmationDialog("Выйти из кабинета?", isPresented: $leaving, titleVisibility: .visible) {
                 Button("Выйти из кабинета", role: .destructive) {
                     Task {
@@ -64,11 +68,101 @@ struct SettingsView: View {
                     }
                 }
             } message: { Text("История и банк сохранятся. Если вы последний участник, кабинет будет архивирован без обычного доступа. Для возвращения понадобится новое приглашение. Сначала нужно отправить ожидающие записи.") }
+    }
+}
+
+struct MembersView: View {
+    @EnvironmentObject private var store: AppStore
+    @State private var busy = false
+    @State private var showingInvitation = false
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Наши люди").font(.largeTitle.weight(.semibold)).tracking(-0.7)
+                    Text("\(store.snapshot?.cabinet.members.count ?? 0) из 10").foregroundStyle(.secondary)
+                }.padding(.vertical, 12)
+            }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+            Section {
+                ForEach(store.snapshot?.cabinet.members ?? []) { member in
+                    HStack {
+                        Text(member.display_name + (member.user_id == store.user?.id ? " · вы" : ""))
+                        Spacer()
+                        Text("Участник").font(.caption).foregroundStyle(.secondary)
+                    }.padding(.vertical, 7)
+                }
+            } footer: { Text("Все управляют одним бюджетом. У создателя те же права.") }
+        }.listStyle(.plain).canScreen().navigationTitle("Участники")
+            .safeAreaInset(edge: .bottom) {
+                if (store.snapshot?.cabinet.members.count ?? 10) < 10 {
+                    AsyncButton("Пригласить", busy: $busy) {
+                        _ = try await store.onlineCommand("create_invitation", payload: [:])
+                        showingInvitation = store.invitation != nil
+                    }.buttonStyle(CanPrimaryButtonStyle()).padding(24).background(CanStyle.background)
+                }
+            }
+            .sheet(isPresented: $showingInvitation) { if let invitation = store.invitation { InvitationView(invitation: invitation) } }
+    }
+}
+
+struct ProfileView: View {
+    @EnvironmentObject private var store: AppStore
+    @State private var displayName = ""
+    @State private var busy = false
+    @State private var loggingOut = false
+    var body: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(store.user?.display_name ?? "Профиль").font(.largeTitle.weight(.semibold)).tracking(-0.7)
+                    Text("Вход через Apple").font(.subheadline).foregroundStyle(.secondary)
+                }.padding(.vertical, 12)
+            }.listRowBackground(Color.clear)
+            Section("Имя") {
+                TextField("Имя", text: $displayName).onChange(of: displayName) { _, value in displayName = String(value.prefix(40)) }
+                AsyncButton("Сохранить", busy: $busy) { try await store.renameProfile(displayName) }
+                    .disabled(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || displayName == store.user?.display_name)
+            }
+            Section("Доступ") {
+                Button("Выйти из аккаунта", role: .destructive) { loggingOut = true }
+                NavigationLink("Удалить аккаунт", destination: DeletionView())
+            }
+        }.canScreen().navigationTitle("Профиль").onAppear { displayName = store.user?.display_name ?? "" }
             .confirmationDialog("Выйти из аккаунта?", isPresented: $loggingOut, titleVisibility: .visible) {
                 Button("Выйти и сохранить очередь на телефоне", role: .destructive) {
                     Task { do { try await store.logout() } catch { store.message = error.localizedDescription } }
                 }
             } message: { Text("Неотправленные записи сохранятся только для этого аккаунта на этом iPhone. Отправка продолжится после входа тем же Apple Account. Для отзыва сессии нужна сеть.") }
+    }
+}
+
+struct NameEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    let initial: String
+    let save: (String) async throws -> Void
+    @State private var value = ""
+    @State private var busy = false
+    @State private var failure: String?
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 24) {
+                TextField(title, text: $value).font(.title2).textFieldStyle(.plain)
+                    .onChange(of: value) { _, text in value = String(text.prefix(40)) }
+                if let failure { Text(failure).font(.footnote).foregroundStyle(CanStyle.danger) }
+                Button("Сохранить") {
+                    busy = true
+                    Task {
+                        do { try await save(value.trimmingCharacters(in: .whitespacesAndNewlines)); dismiss() }
+                        catch { failure = error.localizedDescription }
+                        busy = false
+                    }
+                }.buttonStyle(CanPrimaryButtonStyle()).disabled(busy || value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Spacer(minLength: 0)
+            }.padding(24).canScreen().navigationTitle(title)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } } }
+                .onAppear { value = initial }
+        }.presentationDetents([.height(280), .medium]).presentationDragIndicator(.visible)
     }
 }
 
@@ -123,7 +217,7 @@ struct QueueView: View {
                 Text("Используйте, только если владелец восстановил сервер из резервной копии. Записи на телефоне сохранятся.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-        }.navigationTitle("Синхронизация").toolbar(.visible, for: .navigationBar)
+        }.canScreen().navigationTitle("Синхронизация").toolbar(.visible, for: .navigationBar)
             .sheet(item: $selected) { item in RecoveryView(item: item) }
             .confirmationDialog("Убрать отклонённый черновик?", isPresented: Binding(get: { discarding != nil }, set: { if !$0 { discarding = nil } }), titleVisibility: .visible) {
                 Button("Убрать черновик", role: .destructive) {
@@ -197,7 +291,7 @@ struct PrivacyView: View {
                 Section("Доступ") { Text("Бюджет доступен активным участникам кабинета. Вход выполняется только через Apple. Виджет получает отдельный доступ только к краткому остатку.") }
                 Section("Камера") { Text("Камера включается только для сканирования приглашения. Кадры не сохраняются и не отправляются на сервер.") }
                 Section("Выход и удаление") { Text("Выход из кабинета сохраняет общий журнал; выход из аккаунта отзывает сессию. При удалении аккаунта имя и связь с ним стираются. Операции, суммы и даты остаются в общем журнале без имени; баланс других участников не меняется.") }
-            }.navigationTitle("О данных").toolbar { Button("Закрыть") { dismiss() } }
+            }.canScreen().navigationTitle("Об использовании данных").toolbar { Button("Закрыть") { dismiss() } }
         }
     }
 }
@@ -356,12 +450,12 @@ struct DeletionCompletionView: View {
             Text(store.user == nil ? "Удаление аккаунта принято" : "Удаление прежнего аккаунта принято").font(.largeTitle.bold())
             Text("Данные этого аккаунта и ключи доступа удалены с этого iPhone. Общие операции, суммы и даты сохраняются без имени и связи с аккаунтом.")
             if let receipt = store.deletionReceipt, let deadline = BusinessTime.parse(receipt.primary_deletion_deadline) {
-                Text("Сервер завершит основное удаление до \(deadline.formatted(date: .long, time: .shortened)). Копии в резервных архивах исчезнут в течение \(receipt.backup_retention_days) дней.")
+                Text("Сервер завершит основное удаление до \(deadline.formatted(date: .long, time: .shortened)).")
                     .foregroundStyle(.secondary)
             } else {
                 Text("Удаление уже выполняется на сервере. Новый вход станет доступен после завершения и создаст новый пустой аккаунт.").foregroundStyle(.secondary)
             }
-            Text("Принятие запроса не означает, что все серверные и резервные копии уже очищены.")
+            Text("Принятие запроса не означает, что сервер уже завершил очистку.")
                 .font(.footnote).foregroundStyle(.secondary)
             Button("Продолжить") { store.dismissDeletionReceipt() }.buttonStyle(.borderedProminent)
         }.padding(28).navigationBarBackButtonHidden()

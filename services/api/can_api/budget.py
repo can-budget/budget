@@ -1,4 +1,4 @@
-"""Can calculation_version=2: deterministic integer arithmetic, NOT a backend.
+"""Can calculation versions 2/3: deterministic integer arithmetic, NOT a backend.
 
 Dates are cabinet-local canonical dates. `end_date` is the ORIGINAL end date.
 Revisions have an effective day, increasing sequence, fixed bank adjustment and
@@ -50,6 +50,9 @@ def project(data: dict[str, Any]) -> dict[str, Any]:
     start, original_end, today = (_date(data[k]) for k in ("start_date", "end_date", "as_of_date"))
     if not 0 <= (original_end - start).days <= 365 or today < start:
         raise ValueError("invalid sprint interval/as_of_date")
+    cutoff = _date(data["topups_today_from"]) if data.get("topups_today_from") is not None else None
+    if cutoff is not None and cutoff < start:
+        raise ValueError("topup cutoff precedes sprint")
     exposure = initial
     revisions = []
     for item in data.get("revisions", []):
@@ -116,8 +119,9 @@ def project(data: dict[str, Any]) -> dict[str, Any]:
         carry = max(previous_available, 0) if day > start else 0
         p, e = totals.get(day, [0, 0])
         inflow = p + adjustment
-        distributed = bank // n + inflow // n - e
-        spend_today = carry + (bank - carry) // n + inflow // n - e
+        allowance = p + adjustment // n if cutoff is not None and day >= cutoff else inflow // n
+        distributed = bank // n + allowance - e
+        spend_today = carry + (bank - carry) // n + allowance - e
         selectable = day > start and n > 1 and carry > 0
         stored = choices.get(day)
         available = spend_today if stored == "today" else distributed

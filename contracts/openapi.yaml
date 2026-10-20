@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Can shared budget API
-  version: 1.1.1
-  description: Implementation contract for Can v1.1. Integer minor units, calculation_version=2,
+  version: 1.2.0
+  description: Implementation contract for Can v1.1. Integer minor units, calculation versions 2/3,
     Asia/Shanghai business date. Product rules and reference calculations are unchanged.
     Technical clarifications are recorded in contracts/README.md. Account deletion
     preserves the shared financial ledger and removes the deleted account's identity links.
@@ -2153,7 +2153,13 @@ components:
         calculation_version:
           type: integer
           format: int64
-          const: 2
+          enum: [2, 3]
+        topups_today_from:
+          description: Version 3 adds each topup fully to its effective day from this date; earlier days retain version 2 arithmetic.
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
         status:
           type: string
           enum:
@@ -2173,6 +2179,14 @@ components:
       - status
       - initial_end_date
       additionalProperties: false
+      allOf:
+      - if:
+          properties:
+            calculation_version: {const: 3}
+        then:
+          required: [topups_today_from]
+          properties:
+            topups_today_from: {type: string, format: date}
     DayAggregate:
       type: object
       properties:
@@ -2909,7 +2923,7 @@ components:
         calculation_version:
           type: integer
           format: int64
-          const: 2
+          enum: [2, 3]
         status:
           type: string
           enum:

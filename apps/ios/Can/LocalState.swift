@@ -152,9 +152,9 @@ enum Reconciliation {
         if let server = BusinessTime.parse(response.snapshot.server_time) { next.serverOffset = server.timeIntervalSinceNow }
         return next
     }
-    static func projection(_ state: LocalState, membershipID: String, now: Date = Date()) throws -> Projection? {
+    static func projection(_ state: LocalState, membershipID: String, now: Date = Date(), includingDraft: Bool = false) throws -> Projection? {
         guard let snapshot = state.snapshot, let sprint = snapshot.sprint else { return nil }
-        let additions: [DayInput] = state.pending.compactMap { item in
+        var additions: [DayInput] = state.pending.compactMap { item in
             guard item.cabinetID == snapshot.cabinet.id, item.membershipID == membershipID,
                   item.command.type == "add_entry",
                   (["queued", "unknown", "sending"].contains(item.state) ||
@@ -167,6 +167,11 @@ enum Reconciliation {
                             expenses_minor: item.command.payload["kind"]?.text == "expense" ? amount : 0)
         }
         let day = max(snapshot.business_date, BusinessTime.day(now.addingTimeInterval(state.serverOffset)))
-        return try BudgetEngine.project(snapshot.input(asOf: day, additional: additions))
+        if includingDraft, day <= sprint.end_date, ["expense", "topup"].contains(state.draftKind),
+           let amount = Money.parse(state.draftAmount), amount > 0 {
+            additions.append(DayInput(day: day, topups_minor: state.draftKind == "topup" ? amount : 0,
+                                      expenses_minor: state.draftKind == "expense" ? amount : 0))
+        }
+        return try snapshot.project(asOf: day, additional: additions)
     }
 }

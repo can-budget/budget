@@ -1,0 +1,373 @@
+[
+  {
+    "name": "topup_2_today",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-20",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 200,
+          "expenses_minor": 0
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 200200,
+      "today_remaining_minor": 20200,
+      "days_remaining": 10,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "topup_20_today",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-20",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 2000,
+          "expenses_minor": 0
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 202000,
+      "today_remaining_minor": 22000,
+      "days_remaining": 10,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "expense_5_today",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-20",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 0,
+          "expenses_minor": 500
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 199500,
+      "today_remaining_minor": 19500,
+      "days_remaining": 10,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "expense_50_today",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-20",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 0,
+          "expenses_minor": 5000
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 195000,
+      "today_remaining_minor": 15000,
+      "days_remaining": 10,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "mixed_today",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-20",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 2000,
+          "expenses_minor": 5000
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 197000,
+      "today_remaining_minor": 17000,
+      "days_remaining": 10,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "split_topups",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-20",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 200,
+          "expenses_minor": 0
+        },
+        {
+          "day": "2026-10-20",
+          "topups_minor": 1800,
+          "expenses_minor": 0
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 202000,
+      "today_remaining_minor": 22000,
+      "days_remaining": 10,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "cutover_preserves_yesterday",
+    "topups_today_from": "2026-10-21",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-21",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 2000,
+          "expenses_minor": 0
+        },
+        {
+          "day": "2026-10-21",
+          "topups_minor": 2000,
+          "expenses_minor": 0
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 204000,
+      "today_remaining_minor": 24444,
+      "days_remaining": 9,
+      "carry_minor": 20200,
+      "carry_status": "pending",
+      "today_mode_remaining_minor": 42400,
+      "distribute_remaining_minor": 24444
+    }
+  },
+  {
+    "name": "cutover_with_today_carry",
+    "topups_today_from": "2026-10-21",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-21",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 2000,
+          "expenses_minor": 0
+        },
+        {
+          "day": "2026-10-21",
+          "topups_minor": 2000,
+          "expenses_minor": 0
+        }
+      ],
+      "choices": {
+        "2026-10-21": "today"
+      },
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 204000,
+      "today_remaining_minor": 42400,
+      "days_remaining": 9,
+      "carry_minor": 20200,
+      "carry_status": "selected_today",
+      "today_mode_remaining_minor": 42400,
+      "distribute_remaining_minor": 24444
+    }
+  },
+  {
+    "name": "signed_revision_still_distributed",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-20",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 2000,
+          "expenses_minor": 0
+        }
+      ],
+      "choices": {},
+      "revisions": [
+        {
+          "effective_day": "2026-10-20",
+          "sequence": 1,
+          "bank_adjustment_minor": -500
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 201500,
+      "today_remaining_minor": 21950,
+      "days_remaining": 10,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "last_day_equals_bank",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 20000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-20",
+      "as_of_date": "2026-10-20",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 2000,
+          "expenses_minor": 500
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 21500,
+      "today_remaining_minor": 21500,
+      "days_remaining": 1,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "completed_keeps_final_bank",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 20000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-20",
+      "as_of_date": "2026-10-21",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 2000,
+          "expenses_minor": 500
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "completed",
+      "bank_minor": 21500,
+      "today_remaining_minor": null,
+      "days_remaining": 0,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "overdrawn_no_double_penalty",
+    "topups_today_from": "2026-10-20",
+    "input": {
+      "initial_minor": 200000,
+      "start_date": "2026-10-20",
+      "end_date": "2026-10-29",
+      "as_of_date": "2026-10-21",
+      "days": [
+        {
+          "day": "2026-10-20",
+          "topups_minor": 2000,
+          "expenses_minor": 25000
+        }
+      ],
+      "choices": {},
+      "revisions": []
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 177000,
+      "today_remaining_minor": 19666,
+      "days_remaining": 9,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  }
+]

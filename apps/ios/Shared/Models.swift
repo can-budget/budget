@@ -1,5 +1,11 @@
 import Foundation
 
+enum RequestFailure {
+    static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
+    }
+}
+
 enum JSONValue: Codable, Equatable, Sendable {
     case string(String), integer(Int64), decimal(Double), bool(Bool), object([String: JSONValue]), array([JSONValue]), null
     init(from decoder: Decoder) throws {
@@ -100,6 +106,7 @@ struct Sprint: Codable, Identifiable {
     let initial_end_date: String
     let calculation_version: Int
     let status: String
+    var topups_today_from: String? = nil
 }
 struct CarryDecision: Codable {
     let day: String
@@ -134,8 +141,14 @@ struct Snapshot: Codable {
     let projection: Projection?
     let sprint_revisions: [SprintRevision]
 
+    func project(asOf: String? = nil, additional: [DayInput] = [], revision: RevisionInput? = nil) throws -> Projection {
+        try BudgetCalculation.project(input(asOf: asOf, additional: additional, revision: revision),
+                                      topupsTodayFrom: sprint?.calculation_version == 3 ? sprint?.topups_today_from : nil)
+    }
+
     func input(asOf: String? = nil, additional: [DayInput] = [], revision: RevisionInput? = nil) throws -> BudgetInput {
-        guard let s = sprint, s.calculation_version == 2 else {
+        guard let s = sprint, [2, 3].contains(s.calculation_version),
+              s.calculation_version != 3 || s.topups_today_from != nil else {
             throw APIError.local("Для этого расчёта требуется обновить приложение.")
         }
         return BudgetInput(initial_minor: s.initial_minor, start_date: s.start_date,

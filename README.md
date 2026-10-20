@@ -26,7 +26,8 @@ executed checks and the remaining release work.
 
 No categories, bank integrations, administrator role, alternative login or
 multiple active cabinets are introduced. Amounts use integer minor units;
-business dates use `Asia/Shanghai`; the calculation version remains 2.
+business dates use `Asia/Shanghai`. Version 2 preserves historical calculations;
+version 3 adds topups fully to their effective day from each sprint's recorded cutoff.
 
 ## Local verification
 
@@ -60,6 +61,12 @@ make ios-test
 one explicitly. These commands do not upload a build or provision owner accounts.
 Configure app identifiers, App Group, Keychain group and API URL using the iOS
 configuration instructions before running against your server.
+
+For an interactive owner-operated test before Apple activation, run
+`make ios-simulator` or open `apps/ios/Run Simulator.command`. This creates a
+separate synthetic account on the current API through owner SSH and imports an
+eight-hour session into a dedicated Debug Simulator app. No public login route
+is added. See the [Simulator instructions](apps/ios/README.md#интерактивная-проверка-на-mac-без-apple-developer).
 
 ## Run and release
 

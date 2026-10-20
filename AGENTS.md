@@ -47,6 +47,7 @@ only checks actually executed and reported may be treated as passing.
 - Source credential patterns: `make secret-check` (offline, no runtime credential reads); included in `make verify`.
 - iOS metadata: `make ios-project-check` (no Swift compilation); included in `make verify`.
 - iOS: `make ios-build`, `make ios-test` on a Mac with the required Xcode/SDK.
+- Interactive iOS: `make ios-simulator` builds/opens a dedicated Simulator and issues an eight-hour test session through the owner's SSH access. It writes a separate synthetic test account to the selected production API; it is never part of `verify`.
 - PostgreSQL integration tests require an explicit disposable `TEST_DATABASE_URL`;
   skipped PostgreSQL tests and unavailable Xcode checks are never reported as PASS.
 
