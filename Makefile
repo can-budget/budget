@@ -2,9 +2,11 @@ PYTHON ?= .venv/bin/python
 export IOS_DESTINATION
 API_ROOT := services/api
 SIMULATOR_TOOLS := apps/ios/tools/run_simulator.py apps/ios/tools/issue_simulator_session.py
+IOS_TOOLS := $(SIMULATOR_TOOLS) apps/ios/tools/adhoc_release.py
+export IOS_DEVICE IOS_IPA IOS_BUILD_NUMBER
 export PYTHONPATH := $(CURDIR)/$(API_ROOT)
 
-.PHONY: install dev test test-unit test-postgres test-one reference-check contract-check infra-check infra-test ios-project-check secret-check lint format typecheck verify ios-test ios-build ios-simulator
+.PHONY: install dev test test-unit test-postgres test-one reference-check contract-check infra-check infra-test ios-project-check secret-check lint format typecheck verify ios-test ios-build ios-simulator ios-doctor ios-release ios-inspect ios-devices ios-install
 install:
 	python3 scripts/bootstrap.py
 	$(PYTHON) -m pip install -c services/api/requirements-dev.lock -e './services/api[dev]'
@@ -34,9 +36,9 @@ ios-project-check:
 secret-check:
 	$(PYTHON) scripts/check_secrets.py
 lint:
-	$(PYTHON) -m ruff check --config services/api/pyproject.toml services/api scripts infra $(SIMULATOR_TOOLS)
+	$(PYTHON) -m ruff check --config services/api/pyproject.toml services/api scripts infra $(IOS_TOOLS)
 format:
-	$(PYTHON) -m ruff format --config services/api/pyproject.toml services/api scripts infra $(SIMULATOR_TOOLS)
+	$(PYTHON) -m ruff format --config services/api/pyproject.toml services/api scripts infra $(IOS_TOOLS)
 typecheck:
 	$(PYTHON) -m mypy --config-file services/api/pyproject.toml services/api/can_api
 verify: lint typecheck test-unit reference-check contract-check infra-check infra-test ios-project-check secret-check
@@ -46,3 +48,13 @@ ios-build:
 	xcodebuild -project apps/ios/Can.xcodeproj -scheme Can -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
 ios-simulator:
 	python3 apps/ios/tools/run_simulator.py $(SIMULATOR_ARGS)
+ios-doctor:
+	python3 apps/ios/tools/adhoc_release.py doctor
+ios-release:
+	python3 apps/ios/tools/adhoc_release.py build
+ios-inspect:
+	python3 apps/ios/tools/adhoc_release.py inspect
+ios-devices:
+	python3 apps/ios/tools/adhoc_release.py devices
+ios-install:
+	python3 apps/ios/tools/adhoc_release.py install

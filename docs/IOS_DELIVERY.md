@@ -1,78 +1,75 @@
-# Выпуск Can на два семейных iPhone
+# Ручной выпуск Can на два iPhone
 
-Проверено по документации Apple 13 октября 2026 года. Это инструкция и рекомендация; подпись, доступ к Apple Developer, загрузка сборки и установка на телефоны ещё не выполнялись. Ранее согласованная приёмка через TestFlight остаётся в силе, пока владелец не выберет другой способ.
+20 октября 2026 года владелец выбрал **Ad Hoc с Mac, сборка по команде и установка по кабелю**. Платные сервисы сборки, Xcode Cloud и автоматическая публикация для этого процесса не нужны. Этот выбор заменяет прежний план приёмки через TestFlight.
 
-## Что выбрать при редких обновлениях
+Владелец подтвердил отсутствие платного Apple Developer Program. Команды подготовлены, но первый подписанный `.ipa` требует настройки платной команды. Установку на настоящие телефоны и реальный Apple login/APNs ещё необходимо выполнить.
 
-Начать стоит с **ручного выпуска с Mac**, сохранив автоматические проверки. Для двух телефонов отдельная автоматизация публикации сейчас добавляет настройку signing и обслуживание ещё одного процесса. Первый выпуск через TestFlight позволит провести уже согласованную приёмку.
+## Обычный выпуск после однократной настройки
 
-Если после этого важнее реже перевыпускать неизменившееся приложение и оба телефона доступны рядом с Mac, практичный вариант — **ручной Ad Hoc Release**. Это предложение, а не выполненное переключение. Если важнее получать обновления на телефонах без подключения к Mac, удобнее оставить TestFlight и заранее планировать новые сборки.
+Скачать репозиторий на Mac с полным Xcode 26+ и Python 3.11+. XcodeGen, CocoaPods, backend-зависимости и отдельный сервис сборки не требуются. Из корня репозитория:
 
-| Способ | Как получаем обновление | Обслуживание |
-| --- | --- | --- |
-| Ручной TestFlight | Один upload с Mac; оба пользователя ставят сборку через TestFlight | Новая сборка до истечения 90 дней, даже без изменений кода |
-| Ручной Ad Hoc с платной командой | Подписанная `.ipa` устанавливается на два зарегистрированных iPhone | Следить за реальными сроками профилей и сертификата; до истечения переподписать и установить обновление |
-| Xcode Cloud → TestFlight | Облачные build/test/archive и доставка выбранной группе | Настроить доступ к репозиторию, workflow и контроль ошибок; ограничение 90 дней сохраняется |
+```sh
+make ios-doctor
+make ios-release
+make ios-inspect
+make ios-devices
+make ios-install IOS_DEVICE="Имя первого iPhone"
+make ios-install IOS_DEVICE="Имя второго iPhone"
+```
 
-Apple ограничивает доступность каждой TestFlight-сборки 90 днями. Автоматизация не продлевает уже установленную сборку: она должна создать и доставить новую. Для нашего процесса разумен внутренний ориентир перевыпуска через 60 дней, оставляющий запас на проверку и ошибки; **60 дней — наша рекомендация, не правило Apple**. [TestFlight overview](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/).
+Телефоны можно подключать по очереди. Разблокировать iPhone, подтвердить доверие Mac и включить Developer Mode, перезапустив телефон и подтвердив включение. Имя или идентификатор для `IOS_DEVICE` показывает `ios-devices`. Перед установкой проверяется настоящий UDID выбранного телефона: он должен присутствовать в профилях **приложения и виджета**. Виджет доставляется внутри приложения; после установки пользователь добавляет его на домашний экран или экран блокировки.
 
-Платная установка с Mac также не бессрочна. У provisioning profile есть `ExpirationDate`; Apple указывает, что срок обычно не превышает года. Не обещаем «ровно год»: перед установкой записываем реальные даты профилей **приложения и виджета**, проверяем сертификат и планируем обновление заранее. Отзыв подписи тоже нельзя игнорировать. [Apple TN3125](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles).
+`ios-release` создаёт Release archive и выполняет локальный Ad Hoc export. В Xcode 26 метод называется `release-testing`; старое имя `ad-hoc` устарело. Xcode разрешено обновлять provisioning через Apple Developer. Upload в App Store Connect и установка на телефон не выполняются командой сборки.
 
-Бесплатный **Personal Team** — другой режим: его профили истекают через 7 дней. При наличии платного Apple Developer Program нужно выбрать именно платную команду владельца в обоих targets; платная подписка сама по себе не меняет выбранную Xcode команду. [Developer account overview](https://developer.apple.com/help/account/basics/about-your-developer-account).
+Результаты находятся в `build/ios-adhoc/<UTC timestamp>/`:
+
+- `export/Can.ipa` — подписанная универсальная сборка с виджетом;
+- `Can.xcarchive` — архив для последующего выпуска/диагностики;
+- `archive.log`, `export.log` — логи Xcode;
+- `release.json` — версии, Git commit и признак локальных изменений (если есть Git checkout), SHA-256 и реальные сроки подписи.
+
+`build/ios-adhoc/latest.json` указывает на последний **успешно проверенный** выпуск. Ошибка сборки или проверки не заменяет предыдущий результат. Артефакты, отчёты и содержащие UDID профили остаются вне Git. Скачанный ZIP без `.git` тоже можно собрать; commit в отчёте будет неизвестен.
+
+`ios-inspect` повторно проверяет последнюю сборку. Другую `.ipa` можно выбрать явно:
+
+```sh
+make ios-inspect IOS_IPA="/путь/Can.ipa"
+make ios-install IOS_IPA="/путь/Can.ipa" IOS_DEVICE="Имя iPhone"
+```
+
+Номер билда генерируется из UTC-времени. При необходимости: `make ios-release IOS_BUILD_NUMBER=42`. Приложение и extension получают одинаковые version/build numbers.
 
 ## Что подготовить один раз
 
-1. На Mac открыть `apps/ios/Can.xcodeproj`, выбрать общую схему `Can`. Конфигурация проекта поддерживает iOS 17+; в проверочном CI выбран Xcode 26.3. Перед загрузкой сверить действующие [требования Apple](https://developer.apple.com/news/upcoming-requirements/).
-2. Заполнить **несекретные** значения в [Owner.xcconfig](../apps/ios/Config/Owner.xcconfig): Team ID, bundle IDs приложения и виджета, App Group, shared Keychain group, HTTPS origin production API. Текущий адрес `.invalid` намеренно блокирует сетевую работу.
-3. Настроить Apple capabilities и provisioning обоих targets по [iOS README](../apps/ios/README.md). Основному приложению нужен Sign in with Apple; приложению и виджету — соответствующие App Group/Keychain/Push entitlements. Сохранить отдельную приватную группу Keychain приложения. Backend `CAN_APPLE_CLIENT_ID` должен совпадать с bundle ID приложения.
-4. Подготовить работающий production API с Apple/APNs настройками. Приватные ключи, signing credentials и UDID устройств не добавлять в исходники. Для TestFlight создать запись приложения в App Store Connect и закрытую группу двух тестировщиков.
-5. Выполнить на Mac из корня репозитория:
+1. Оформить Apple Developer Program и добавить платную команду в **Xcode → Settings → Accounts**. Apple указывает $99 за год членства с региональными вариантами цены. Бесплатный Personal Team имеет семидневные профили и не заменяет выбранную Ad Hoc distribution. [Членство Apple](https://developer.apple.com/programs/enroll/), [Personal Team](https://developer.apple.com/help/account/basics/about-your-developer-account).
+2. Заполнить **несекретные** значения [Owner.xcconfig](../apps/ios/Config/Owner.xcconfig): `CAN_DEVELOPMENT_TEAM`, `CAN_BUNDLE_ID`, `CAN_WIDGET_BUNDLE_ID`, `CAN_APP_GROUP`, `CAN_KEYCHAIN_GROUP`. Production API уже задан как `https:/$()/151.243.217.6`. Заглушки `YOUR_TEAM_ID` и `com.yourcompany.…` не подходят для выпуска. После первой установки не менять эти идентификаторы при обычном обновлении: от них зависит доступ к прежним данным и Keychain.
+3. Открыть `apps/ios/Can.xcodeproj`, выбрать одну платную команду и automatic signing для **Can и CanWidget**. Для основного App ID включить Sign in with Apple, для соответствующих targets — App Groups, Keychain Sharing и Push Notifications. Xcode должен подготовить действующие signing identities и профили. Пароли, приватные ключи и экспортированные signing credentials в исходники не добавлять.
+4. Зарегистрировать **оба iPhone** в платной команде. UDID можно получить в Xcode Devices and Simulators; `ios-devices` показывает доступные устройства. Ad Hoc требует App ID, distribution certificate и зарегистрированные устройства. Xcode может управлять профилями автоматически. Скрипт не регистрирует новые телефоны за владельца: если устройство отсутствует в любом из профилей, его нужно зарегистрировать и пересобрать. [Ad Hoc profiles](https://developer.apple.com/help/account/provisioning-profiles/create-an-ad-hoc-provisioning-profile/).
+5. Настроить настоящий Sign in with Apple и APNs на уже работающем backend согласно [iOS README](../apps/ios/README.md). `CAN_APPLE_CLIENT_ID` должен совпадать с bundle ID приложения. Apple credentials пока не подключены; восьмичасовая сессия симулятора не является входом для физических телефонов. Приватные `.p8` остаются в защищённом серверном хранилище.
+6. Выполнить проверки `make ios-build` и `make ios-test`, затем `make ios-doctor` и `make ios-release`. Первую установку проверить на обоих телефонах: вход Apple, общий кабинет, ввод офлайн/синхронизация, перезапуск, оба вида виджетов и сценарии удаления по [acceptance record](ACCEPTANCE_RECORD.md). Для первого запуска обеспечить доступ в интернет для проверки подписи Apple.
 
-   ```sh
-   make ios-build
-   make ios-test
-   ```
+## Подпись и срок действия
 
-Эти команды проверяют simulator build и XCTest; они **не** подписывают выпуск и **не** загружают его. Полноценный Apple login, APNs и доступ к App Group нужно дополнительно проверить на подписанных устройствах. Виджет встроен в приложение и доставляется вместе с ним; пользователь затем добавляет его на домашний экран.
+Скрипт проверяет кодовые подписи приложения и виджета, embedded provisioning profiles, фактически использованные distribution certificates, Team/App IDs, App Group, приватную/общую Keychain group, Sign in with Apple и production APNs. Simulator, Personal Team, Development, Enterprise и App Store profiles не принимаются за Ad Hoc. Установка каждый раз повторяет проверку экспортированного `.ipa` и прав выбранного телефона.
 
-## Ручной выпуск через TestFlight
+Архив создаётся с development provisioning, затем Xcode экспортирует и переподписывает shipping bundle для Ad Hoc. Installer берёт `.app` **из экспортированного `.ipa`**, а не из development-signed архива. Для финального приложения и backend-регистрации APNs требуется `production`; это проверяется после экспорта. `devicectl` принимает `.app`, поэтому helper распаковывает проверяемую `.ipa`, сохраняя права executable-файлов.
 
-1. Выбрать проверенный commit для выпуска. Увеличить `CURRENT_PROJECT_VERSION`; `MARKETING_VERSION` менять при необходимости. Приложение и extension используют общие значения из `Owner.xcconfig`. Сохранить запись о commit и номере сборки.
-2. В Xcode выбрать схему `Can`, физическую iOS build destination и **Product → Archive**. В Organizer проверить подпись обоих targets, затем **Validate / Distribute App → App Store Connect → Upload**. Выпускается один архив с виджетом, не два независимых приложения. Подготовка идентификаторов и версии описана в [Preparing your app for distribution](https://developer.apple.com/documentation/xcode/preparing-your-app-for-distribution).
-3. После обработки в App Store Connect проверить export compliance и сведения для тестирования, назначить сборку группе. Семейного пользователя можно пригласить внешним тестировщиком без выдачи ему роли в App Store Connect; первая внешняя сборка проходит Beta App Review. Не считать срок проверки гарантированным. Оба пользователя принимают приглашение и устанавливают сборку в TestFlight. [TestFlight overview](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/).
-4. На обоих телефонах проверить Apple login, общий кабинет, ввод офлайн и последующую синхронизацию, перезапуск, виджет и удаление аккаунта по [acceptance record](ACCEPTANCE_RECORD.md). Записать фактическую дату истечения сборки и следующий плановый выпуск.
-5. Даже если код не менялся, до истечения срока повторить выпуск с новым build number. Проверить, что **оба телефона установили новую сборку**: одного успешного upload недостаточно.
+Команда установки обновляет существующее приложение без вызова uninstall. Не удалять «Можно» перед обычным обновлением: на телефоне могут находиться неотправленные записи. Сохранять прежние bundle IDs, App Group и Keychain groups.
 
-TestFlight не требует включения Developer Mode для обычной установки. [Enabling Developer Mode](https://developer.apple.com/documentation/xcode/enabling-developer-mode-on-a-device).
+Apple не гарантирует ровно год. Профили обычно действуют не более года, сертификаты тоже имеют срок. Отчёт показывает ближайшую границу: минимум сроков **профилей и настоящих сертификатов приложения/виджета**. `renew_before` — наш запас 30 дней, а не правило Apple. При коротком сроке helper выводит предупреждение; обновить сертификат/профили через Xcode и пересобрать. [Apple TN3125](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles).
 
-## Ручная установка Ad Hoc с Mac
-
-Этот путь применяем после выбора владельца. Он предназначен Apple для распространения тестовых сборок на известные устройства и не даёт бессрочной установки.
-
-1. Подключить оба iPhone к Mac и зарегистрировать их UDID в платной команде. Apple допускает до 100 iPhone за год членства; два телефона укладываются в этот лимит. Регистрация нового телефона впоследствии потребует включить его в профили новой сборки. [Devices overview](https://developer.apple.com/help/account/devices/devices-overview).
-2. Подготовить Ad Hoc profiles с distribution certificate, правильными App IDs, двумя устройствами и capabilities для приложения и extension. При automatic signing Xcode может управлять профилями; всё равно проверить фактический результат экспорта. [Create an ad hoc provisioning profile](https://developer.apple.com/help/account/provisioning-profiles/create-an-ad-hoc-provisioning-profile).
-3. После проверок создать **Release archive** схемы `Can` и экспортировать `.ipa` для зарегистрированных устройств с Ad Hoc distribution signing. Названия пунктов Organizer зависят от версии Xcode; проверить выбранный метод и итоговую подпись, не полагаться только на название меню. Установить `.ipa` на оба телефона через Xcode/Device Hub либо Apple Configurator. Для локальной установки включить Developer Mode по инструкции Apple. [Distributing to registered devices](https://developer.apple.com/documentation/xcode/distributing-your-app-to-registered-devices).
-4. Для нашего Release профиля APNs environment должен быть `production` и в entitlements, и в регистрации устройства на backend. Обычный запуск Debug из Xcode использует `development` entitlement и `sandbox` APNs; это отдельный режим проверки, его не следует случайно принять за выпуск.
-5. Записать сроки профилей приложения/extension и сертификата; поставить напоминание заранее, например за 30 дней до ближайшего применимого срока. Выпустить и установить обновление до истечения. При первом запуске обеспечить интернет: для команд, созданных после 6 июня 2021 года, Apple описывает проверку подписи через PPQ. Специальные семидневные offline profiles для нашей задачи не нужны. [Provisioning profile updates](https://developer.apple.com/help/account/provisioning-profiles/provisioning-profile-updates/).
-
-При любом способе обновлять существующую установку с прежними bundle IDs и группами. Не удалять приложение как обычный шаг обновления: локальная очередь может содержать ещё не отправленные покупки. При смене способа распространения сначала проверить сохранение данных и Keychain на контролируемой установке.
-
-## Когда автоматизировать TestFlight
-
-Если ручное обслуживание станет неудобным, рассмотреть **Xcode Cloud**: оно поддерживает TestFlight post-action, ручные запуски и расписание. Для внешней TestFlight-доставки Apple требует clean build. Предлагаемый workflow — тесты, Release archive, upload и доставка закрытой группе; запуск по отдельному iOS release tag либо вручную, плюс контроль приближения срока сборки. Не привязывать выпуск iPhone-приложения к каждому backend commit в `main`. [Xcode Cloud workflow reference](https://developer.apple.com/documentation/xcode/xcode-cloud-workflow-reference).
-
-Apple Developer Program включает 25 compute hours Xcode Cloud в месяц. Это лимит сервиса, не гарантия достаточности для наших тестов; дополнительные планы сейчас не подключаем. Первый workflow требует настройки в Xcode и доступа сервиса к репозиторию владельца. [Get started with Xcode Cloud](https://developer.apple.com/xcode-cloud/get-started/), [First workflow](https://developer.apple.com/documentation/xcode/configuring-your-first-xcode-cloud-workflow).
-
-В текущем репозитории iOS CI выполняет проверки без подписи. Автоматическая публикация iOS, Xcode Cloud и хранение signing credentials **не настроены** этим документом.
+До ближайшего срока выпустить и поставить новую сборку на **оба** телефона. Продление членства само по себе не переподписывает установленную версию. Отзыв подписи или прекращение членства может ограничить работу раньше указанной даты. Ad Hoc не имеет ограничения TestFlight в 90 дней; само приложение остаётся ограничено действующей подписью.
 
 ## Связь с backend CI/CD
 
-Развёртывание backend из `main` обновляет сервер. Установленные приложение и виджет оно не заменяет. Совместимое исправление сервера можно выпустить без новой iOS-сборки; UI, клиентская синхронизация, локальные расчёты, виджет и встроенный API origin обновляются через новый выпуск приложения.
+Backend продолжает автоматически обновляться на VPS из `main`. Установленные приложение и виджет серверная выкладка не заменяет. Изменения UI, клиентских расчётов, виджетов или встроенного API origin доставляются новой ручной iOS-сборкой. Сервер должен сохранять совместимость с установленными версиями.
 
-Работа в ветке `dev` сама по себе не создаёт отдельный сервер и не переключает телефоны на другое окружение. У текущего iOS-приложения один production API origin. Пока существуют старые установленные сборки, серверные изменения должны сохранять совместимость с ними. Изменения правил расчёта требуют согласования и проверки сервера вместе с локальным Swift engine.
+Существующий GitHub iOS workflow проверяет Simulator build и XCTest без владельческих credentials. `ios-release`, `ios-install`, регистрация устройств, upload и хранение signing credentials не добавлены в CI и не входят в `make verify`.
 
-## Что действительно проверено
+## Границы проверки
 
-Выполнены чтение конфигурации и CI репозитория, сверка правил по официальным источникам Apple, проверка локальных ссылок этого документа. Ранее прошла статическая проверка проекта; актуальный общий отчёт — [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
+Локальные unit-тесты release helper используют синтетические профили/сертификаты и fake Apple commands. Они включены в `make infra-test` и `make verify`; Apple, Keychain и устройства ими не изменяются. Проверки Simulator/XCTest проекта не доказывают правильность реальной подписи.
 
-**NOT RUN:** Swift/Xcode build и XCTest, владельческая подпись и реальные даты профилей, Apple login/APNs, архивирование/экспорт, TestFlight upload/review, Ad Hoc установка, Xcode Cloud и двухтелефонная приёмка. 17 октября 2026 года владелец подтвердил наличие только обычного Apple ID; платное членство Apple Developer Program пока не оформлено. Реальные Sign in with Apple/APNs credentials и подпись ещё не настроены.
+20 октября 2026: `make verify` прошёл, включая 27 тестов release helper. Release archive для физического iPhone собран с `CODE_SIGNING_ALLOWED=NO`; оба targets содержат платформу iPhoneOS. Такой архив нельзя установить. Отдельно проверено сохранение подписи Simulator bundle после ZIP-упаковки и распаковки helper; это проверка целостности упаковки, а не Ad Hoc distribution. `ios-doctor` и `ios-release` корректно останавливаются на отсутствующей владельческой настройке до попытки подписи.
+
+**Ещё не выполнены:** Ad Hoc archive/export с владельческой подписью, чтение реальных сроков профилей, установка на оба телефона и приёмка Apple login/APNs на устройствах. Для этого сначала необходимы платное членство, реальные идентификаторы и signing identities.
