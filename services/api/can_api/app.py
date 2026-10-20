@@ -33,7 +33,7 @@ from .ledger import (
 )
 from .security import digest, encrypt, identity, invitation_digest, now, rate_limit, token
 
-app = FastAPI(title="Can shared budget API", version="1.2.0")
+app = FastAPI(title="Can shared budget API", version="1.3.0")
 app.include_router(auth_router)
 
 
@@ -92,7 +92,7 @@ async def limit_requests(request: Request, call_next):
 
 @app.get("/health/live")
 def live():
-    return {"status": "ok", "version": "1.2.0"}
+    return {"status": "ok", "version": "1.3.0"}
 
 
 @app.get("/health/ready")
@@ -112,7 +112,7 @@ def ready():
             check_health()
     except SQLAlchemyError as exc:
         raise Problem("database_unavailable", 503, retryable=True) from exc
-    return {"status": "ok", "version": "1.2.0", "recovery_mode": settings().recovery_mode}
+    return {"status": "ok", "version": "1.3.0", "recovery_mode": settings().recovery_mode}
 
 
 @app.post("/v1/cabinets", status_code=201)

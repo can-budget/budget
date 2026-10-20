@@ -120,10 +120,32 @@ def main() -> None:
     valid("CreateCabinetRequest", cabinet)
     valid("CreateCabinetRequest", {**cabinet, "timezone": "Europe/Moscow"}, False)
 
+    start = {
+        "command_id": command_id,
+        "type": "create_sprint",
+        "payload": {
+            "sprint_id": str(uuid4()),
+            "initial_minor": 1_100_000,
+            "end_date": "2026-11-18",
+            "expected_cabinet_revision": 10,
+        },
+    }
+    valid("Command", start)
+    start["payload"]["replaces_sprint_id"] = str(uuid4())
+    valid("Command", start, False)
+    start["payload"]["expected_business_date"] = "2026-10-20"
+    valid("Command", start)
+    start["payload"]["replaces_sprint_id"] = "wrong-budget"
+    valid("Command", start, False)
+
     deletion = {"command_id": command_id, "confirm_shared_history_changes": True}
     valid("DeleteAccountRequest", deletion)
     for value in (False, "true", 1, None):
-        valid("DeleteAccountRequest", {**deletion, "confirm_shared_history_changes": value}, False)
+        valid(
+            "DeleteAccountRequest",
+            {**deletion, "confirm_shared_history_changes": value},
+            False,
+        )
     valid("DeleteAccountRequest", {"command_id": command_id}, False)
     valid("DeleteAccountRequest", {**deletion, "command_id": "invalid"}, False)
     accepted = {
@@ -137,7 +159,9 @@ def main() -> None:
     valid("DeletionAccepted", {**accepted, "backup_retention_days": 31}, False)
     valid("DeletionAccepted", {**accepted, "primary_deletion_deadline": "later"}, False)
     valid("SignedAppleNotification", {"payload": "signed-notification-placeholder"})
-    valid("SignedAppleNotification", {"signedPayload": "signed-notification-placeholder"})
+    valid(
+        "SignedAppleNotification", {"signedPayload": "signed-notification-placeholder"}
+    )
     valid("SignedAppleNotification", {}, False)
     valid("SignedAppleNotification", {"payload": "a", "signedPayload": "b"}, False)
     valid("SignedAppleNotification", {"payload": 123}, False)

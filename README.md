@@ -28,6 +28,12 @@ No categories, bank integrations, administrator role, alternative login or
 multiple active cabinets are introduced. Amounts use integer minor units;
 business dates use `Asia/Shanghai`. Version 2 preserves historical calculations;
 version 3 adds topups fully to their effective day from each sprint's recorded cutoff.
+Saving an amount and end date in the app starts a fresh budget from today. The
+previous budget is completed atomically and remains in history with its entries;
+its carry, topups and expenses do not enter the new calculation. The new budget's
+amount is the complete starting bank, with no implicit transfer from the old one.
+For example, 11,000 over 30 days starts at 366.66 today. The app labels this flow
+"Новый бюджет" / "Начать" and previews the fresh calculation before confirmation.
 Expenses may exceed today's allowance using the remaining bank, but cannot make
 the total bank negative. The app checks drafts against the bank including local
 pending entries; the server checks mutations under the cabinet lock. Corrections,

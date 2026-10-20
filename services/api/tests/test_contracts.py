@@ -40,6 +40,27 @@ def test_membership_identity_is_required():
         AddEntry.model_validate(data)
 
 
+def test_replacing_budget_requires_explicit_previous_id_and_preview_date():
+    payload = {
+        "sprint_id": str(uuid4()),
+        "initial_minor": 1_100_000,
+        "end_date": "2026-11-18",
+        "expected_cabinet_revision": 10,
+        "replaces_sprint_id": str(uuid4()),
+    }
+    with pytest.raises(ValidationError):
+        Command(command_id=uuid4(), type="create_sprint", payload=payload)
+    command = Command(
+        command_id=uuid4(),
+        type="create_sprint",
+        payload={
+            **payload,
+            "expected_business_date": "2026-10-20",
+        },
+    )
+    assert command.payload["replaces_sprint_id"] == payload["replaces_sprint_id"]
+
+
 def test_recovery_requires_command_link():
     with pytest.raises(ValidationError):
         AddEntry.model_validate(valid_entry() | {"original_occurred_at": "2026-10-11T08:00:00Z"})

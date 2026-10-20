@@ -58,6 +58,7 @@ struct APIError: Codable, Error, LocalizedError, Sendable {
             "active_membership_exists": "У вас уже есть активный кабинет.",
             "sprint_already_active": "В кабинете уже начат спринт.",
             "sprint_completed": "Этот спринт завершён. Его нельзя переоткрыть.",
+            "budget_sync_pending": "Новый бюджет создан. Дожидаемся синхронизации; повторная проверка не создаст ещё один бюджет.",
             "carry_unavailable": "Выбор переноса уже сделан или сегодня не требуется.",
             "invalid_end_date": "Выберите дату от сегодняшнего дня до 366-го дня спринта.",
             "exposure_exceeded": "Достигнут допустимый объём операций спринта.",
@@ -108,6 +109,11 @@ struct Sprint: Codable, Identifiable {
     let calculation_version: Int
     let status: String
     var topups_today_from: String? = nil
+    var closed_at: String? = nil
+    var historyEndDate: String {
+        guard let closed_at, let closed = BusinessTime.parse(closed_at) else { return end_date }
+        return min(end_date, BusinessTime.day(closed))
+    }
 }
 struct CarryDecision: Codable {
     let day: String

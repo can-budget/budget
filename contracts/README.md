@@ -1,4 +1,4 @@
-# Implementation contract 1.2.0
+# Implementation contract 1.3.0
 
 `openapi.yaml` is the active API contract. The complete supplied v1.1 package in
 `Can_Developer_Handoff_v1.1/` remains unchanged, including its calculation engine
@@ -77,3 +77,27 @@ Old negative ledger balances remain readable and may be improved, but new entry
 mutations cannot deepen them. Neither historical calculation engine is clamped.
 The client validates against its projection including pending entries and marks
 an excessive draft as invalid without changing its amount or enqueuing it.
+
+## Fresh budget on amount/date save
+
+The owner's clarified rule on 2026-10-20 is that saving a new amount and end date
+starts a new process from the current Shanghai day. The app now sends
+`create_sprint` with `replaces_sprint_id`, `expected_business_date` and the previewed
+cabinet revision. Under the cabinet lock, the server completes that specific
+budget using its existing `closed_at` field and inserts a new version-3 budget in
+one command savepoint. A stale revision/date, conflicting ID or invalid input
+leaves the previous budget active. Receipt replay cannot create a second budget.
+Legacy creates without a replacement ID still reject an active budget.
+
+The new bank is exactly `initial_minor`. Carry decisions, topups, expenses and
+adjustments belong to the previous sprint ID and are never inherited. Explicitly
+completed budgets are listed as completed even when their original planned end
+date is in the future. Their projections stop at the completion day and their
+original entries and planned dates remain intact. Delayed old entries require
+completed-budget confirmation and an occurrence time no later than completion;
+they affect only that archived budget. Its settings/carry cannot be reopened.
+
+The client waits for the confirmed snapshot before forgetting the durable start
+intent. A snapshot switching budgets clears the previous draft and excludes old
+queued entries from the new budget while preserving their immutable commands.
+No schema migration or automatic reset of an existing budget is performed.

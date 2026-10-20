@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Can shared budget API
-  version: 1.2.0
+  version: 1.3.0
   description: Implementation contract for Can v1.1. Integer minor units, calculation versions 2/3,
     Asia/Shanghai business date. Product rules and reference calculations are unchanged.
     Technical clarifications are recorded in contracts/README.md. Account deletion
@@ -2160,6 +2160,12 @@ components:
           - type: string
             format: date
           - type: 'null'
+        closed_at:
+          description: Explicit completion time. A completed budget stays in history with its original planned end date.
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
         status:
           type: string
           enum:
@@ -2997,12 +3003,32 @@ components:
               type: integer
               format: int64
               minimum: 0
+            replaces_sprint_id:
+              description: Explicitly complete this budget and start the new one atomically. The cabinet revision must match the preview.
+              anyOf:
+              - type: string
+                format: uuid
+              - type: 'null'
+            expected_business_date:
+              anyOf:
+              - type: string
+                format: date
+              - type: 'null'
           required:
           - sprint_id
           - initial_minor
           - end_date
           - expected_cabinet_revision
           additionalProperties: false
+          allOf:
+          - if:
+              required: [replaces_sprint_id]
+              properties:
+                replaces_sprint_id: {type: string}
+            then:
+              required: [expected_business_date]
+              properties:
+                expected_business_date: {type: string, format: date}
       required:
       - command_id
       - type
