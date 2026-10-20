@@ -19,6 +19,8 @@
 <key>NSExceptionMinimumTLSVersion</key><string>TLSv1.2</string>
 <key>NSExceptionRequiresForwardSecrecy</key><true/>
 </dict></dict></dict>
+<key>CanDistribution</key><string>$(CAN_DISTRIBUTION)</string>
+<key>CanPushEnabled</key><string>$(CAN_PUSH_ENABLED)</string>
 <key>CanAppGroup</key><string>$(CAN_APP_GROUP)</string>
 <key>CanPrivateKeychainGroup</key><string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 <key>CanKeychainGroup</key><string>$(AppIdentifierPrefix)$(CAN_KEYCHAIN_GROUP)</string>

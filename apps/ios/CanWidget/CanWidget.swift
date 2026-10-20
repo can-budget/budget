@@ -168,7 +168,7 @@ struct CanPushBudgetWidget: Widget {
 @main
 struct CanWidgets: WidgetBundle {
     var body: some Widget {
-        #if compiler(>=6.2)
+        #if compiler(>=6.2) && !CAN_SIDELOAD
         if #available(iOS 26.0, *) { return CanPushBudgetWidget() }
         #endif
         return CanBudgetWidget()

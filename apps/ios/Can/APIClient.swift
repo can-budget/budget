@@ -57,7 +57,7 @@ actor APIClient {
                                authenticated: Bool = true, headers: [String: String] = [:], expectedStatus: Int? = nil) async throws -> T {
         let generation = self.generation
         if authenticated {
-            guard let current = credentials else { throw APIError(code: "unauthorized", message: "Войдите через Apple. Очередь сохранена.", retryable: false) }
+            guard let current = credentials else { throw APIError(code: "unauthorized", message: "Войдите в аккаунт. Очередь сохранена.", retryable: false) }
             if (BusinessTime.parse(current.tokens.access_expires_at) ?? .distantPast) < Date().addingTimeInterval(30) {
                 try await refresh()
             }
@@ -95,7 +95,7 @@ actor APIClient {
         guard let http = response as? HTTPURLResponse else { throw APIError.local("Не получен ответ сервера.") }
         guard (200..<300).contains(http.statusCode) else {
             if var error = try? JSONDecoder().decode(APIError.self, from: data) {
-                if http.statusCode == 401 { error.code = "unauthorized" }
+                if http.statusCode == 401, error.code != "invalid_credentials" { error.code = "unauthorized" }
                 throw error
             }
             throw APIError(code: http.statusCode == 401 ? "unauthorized" : "http_\(http.statusCode)",
@@ -109,7 +109,7 @@ actor APIClient {
     }
     private func refresh() async throws {
         if let refreshTask { _ = try await refreshTask.value; return }
-        guard var current = credentials else { throw APIError.local("Нужно снова войти через Apple.") }
+        guard var current = credentials else { throw APIError.local("Нужно снова войти в аккаунт.") }
         if current.refreshRequestID == nil {
             current.refreshRequestID = UUID().uuidString.lowercased()
             // Save the request identifier before consuming the refresh credential.

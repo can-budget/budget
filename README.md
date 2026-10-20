@@ -17,15 +17,14 @@ executed checks and the remaining release work.
 | Path | Purpose |
 | --- | --- |
 | `apps/ios/` | SwiftUI application, WidgetKit extension, shared calculation and durable offline state |
-| `services/api/` | FastAPI, PostgreSQL ledger, Apple identity verification, migrations and APNs worker |
+| `services/api/` | FastAPI, PostgreSQL ledger, private password accounts, legacy Apple identity verification, migrations and APNs worker |
 | `contracts/` | Active API contract and documented transport clarifications |
 | `infra/` | Production Compose, HTTPS, encrypted backup and isolated restore tools |
 | `.github/workflows/verify.yml` | Verification on pushes/PRs; main-only image publication and backend deployment |
 | `.github/workflows/ios.yml` | Independent unsigned iOS build/tests; does not gate backend deployment |
 | `Can_Developer_Handoff_v1.1/` | Unmodified source specification, acceptance criteria and calculation fixtures |
 
-No categories, bank integrations, administrator role, alternative login or
-multiple active cabinets are introduced. Amounts use integer minor units;
+No categories, bank integrations, administrator role or multiple active cabinets are introduced. Amounts use integer minor units;
 business dates use `Asia/Shanghai`. Version 2 preserves historical calculations;
 version 3 adds topups fully to their effective day from each sprint's recorded cutoff.
 Saving an amount and end date in the app starts a fresh budget from today. The
@@ -77,21 +76,22 @@ one explicitly. These commands do not upload a build or provision owner accounts
 Configure app identifiers, App Group, Keychain group and API URL using the iOS
 configuration instructions before running against your server.
 
-For manual Ad Hoc delivery to the owner's two registered iPhones:
+For the selected free delivery to two iPhones:
 
 ```sh
-make ios-doctor
-make ios-release
-make ios-inspect
-make ios-devices
-make ios-install IOS_DEVICE="iPhone name"
+make ios-sideload
 ```
 
-This requires a paid Apple team and signing setup; these are not configured yet.
-The helper exports locally, verifies app/widget signing and actual expiration,
-records the result under ignored `build/ios-adhoc/`, and installs on the selected
-registered device. It does not upload to TestFlight or uninstall the existing
-app. See [the one-time setup and release procedure](docs/IOS_DELIVERY.md).
+This produces `Can-SideStore.ipa` under ignored `build/ios-sideload/`. Import it
+into SideStore and keep the widget extension; SideStore signs it using a free
+Apple Account and periodically refreshes the seven-day signature. The app now
+uses owner-provisioned login/password accounts, with no public registration or
+Apple/APNs requirement for this build. See [one-time installation, automatic
+refresh and limits](docs/IOS_DELIVERY.md). Actual installation and autonomous
+refresh on the two iPhones still require device verification.
+
+The previous paid Ad Hoc Make commands remain available as an optional path;
+`ios-release` and `ios-install` do not implement free SideStore installation.
 
 For an interactive owner-operated test before Apple activation, run
 `make ios-simulator` or open `apps/ios/Run Simulator.command`. This creates a
@@ -103,9 +103,10 @@ is added. See the [Simulator instructions](apps/ios/README.md#интеракти
 
 For API development, configure an authorized PostgreSQL database and the required
 `CAN_*` settings from `services/api/can_api/config.py`, apply the reviewed Alembic
-migration to that database, then run `make dev`. Real Apple login requires owner
-credentials. Backend infrastructure can start before Apple activation; provider
-settings remain empty and login/push are unavailable until real keys are added.
+migration to that database, then run `make dev`. Private password accounts are created/reset through `python -m
+can_api.local_accounts` inside the configured API container. No email service
+or paid Apple membership is needed. Legacy Apple login/APNs remain optional
+and unavailable until real provider keys are added.
 See the optional provider configuration in `infra/README.md`. There is no
 fake-login route or seeded runtime budget.
 
@@ -115,13 +116,13 @@ Follow [backend CI/CD activation](infra/CI_CD.md) for branch checks and automati
 `main` deployment. The owner selected `https://151.243.217.6` without a purchased
 domain. On 2026-10-19 PostgreSQL, API, worker and Caddy were started and verified
 healthy; the public readiness endpoint returned 200 with `recovery_mode=single_server`.
-Database schema revision is 0002. No backups or external storage are configured,
+The initial database schema revision was 0002; current release readiness requires 0004. No backups or external storage are configured,
 as explicitly selected by the owner. Apple login and APNs remain unconfigured
 until the separate owner enrollment/key setup. Current automation results are
 available in the repository's `Verify and deploy` workflow.
 Keep credentials outside the repository. Follow [iOS instructions](apps/ios/README.md)
-for owner signing and [two-phone delivery](docs/IOS_DELIVERY.md) for manual
-TestFlight/Ad Hoc choices and their expiry requirements. Use the original
+for owner signing and [two-phone delivery](docs/IOS_DELIVERY.md) for the selected free
+SideStore path and its refresh requirements. Use the original
 [acceptance checklist](Can_Developer_Handoff_v1.1/docs/ACCEPTANCE.md)
 for the final two-phone run; the staging-specific requirements are superseded by
 the owner's single-production decision.

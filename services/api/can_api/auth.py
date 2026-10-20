@@ -13,6 +13,7 @@ from .config import settings
 from .db import execute, one, transaction
 from .errors import Problem, require
 from .ledger import encode, profile
+from .passwords import verify_password
 from .security import (
     apple_exchange,
     decrypt,
@@ -29,6 +30,51 @@ from .security import (
 router = APIRouter()
 DB = Annotated[Connection, Depends(transaction, scope="function")]
 Bearer = Annotated[str | None, Header(alias="Authorization")]
+
+
+@router.post("/v1/auth/password")
+def password_login(body: schemas.PasswordLogin, c: DB):
+    record = one(
+        c,
+        "SELECT user_id,password_hash FROM local_credentials WHERE login=:login",
+        login=body.login,
+    )
+    valid = verify_password(
+        body.password.get_secret_value(), record["password_hash"] if record else None
+    )
+    require(record and valid, "invalid_credentials", 401)
+    assert record is not None
+    user = one(
+        c,
+        "SELECT id,deletion_requested_at FROM users WHERE id=:id FOR UPDATE",
+        id=record["user_id"],
+    )
+    # Serialize against password reset/deletion, then recheck the exact credential version.
+    current = one(
+        c, "SELECT password_hash FROM local_credentials WHERE user_id=:id", id=record["user_id"]
+    )
+    require(
+        user
+        and not user["deletion_requested_at"]
+        and current
+        and current["password_hash"] == record["password_hash"],
+        "invalid_credentials",
+        401,
+    )
+    proof, expires = token(), now() + timedelta(minutes=5)
+    execute(
+        c,
+        "INSERT INTO reauth_tokens(token_hash,user_id,expires_at) VALUES (:hash,:user,:expires)",
+        hash=digest(proof),
+        user=record["user_id"],
+        expires=expires,
+    )
+    return {
+        "user": profile(c, record["user_id"]),
+        "session": issue_session(c, record["user_id"]),
+        "reauth_token": proof,
+        "reauth_expires_at": expires,
+    }
 
 
 @router.post("/v1/auth/apple/challenge")

@@ -17,37 +17,44 @@ struct DeletionAccepted: Codable, Equatable {
 
 struct AccountDeletionIntent: Codable, Equatable {
     let userID: String
-    let appleUserID: String
+    let identityID: String
     let commandID: String
     var reauthToken: String?
     var priorReauthTokens: [String]?
     var accepted: DeletionAccepted?
-    var confirmedByAppleLogin: Bool?
+    var confirmedByLogin: Bool?
 
-    init(userID: String, appleUserID: String, reauthToken: String,
+    // Keep existing protected deletion records readable across the login migration.
+    enum CodingKeys: String, CodingKey {
+        case userID, commandID, reauthToken, priorReauthTokens, accepted
+        case identityID = "appleUserID"
+        case confirmedByLogin = "confirmedByAppleLogin"
+    }
+
+    init(userID: String, identityID: String, reauthToken: String,
          commandID: String = UUID().uuidString.lowercased()) throws {
         guard UUID(uuidString: userID) != nil, UUID(uuidString: commandID) != nil,
-              !appleUserID.isEmpty, !reauthToken.isEmpty else {
+              !identityID.isEmpty, !reauthToken.isEmpty else {
             throw APIError.local("Не удалось подготовить подтверждение удаления.")
         }
-        self.userID = userID; self.appleUserID = appleUserID
+        self.userID = userID; self.identityID = identityID
         self.commandID = commandID; self.reauthToken = reauthToken
     }
     var body: [String: JSONValue] {
         ["command_id": .string(commandID), "confirm_shared_history_changes": .bool(true)]
     }
-    var needsCleanup: Bool { accepted != nil || confirmedByAppleLogin == true }
+    var needsCleanup: Bool { accepted != nil || confirmedByLogin == true }
     var replayProofs: [String] { (priorReauthTokens ?? []) + (reauthToken.map { [$0] } ?? []) }
-    static func confirmedDeletion(userID: String, appleUserID: String) throws -> Self {
-        try Self(confirmedUserID: userID, appleUserID: appleUserID)
+    static func confirmedDeletion(userID: String, identityID: String) throws -> Self {
+        try Self(confirmedUserID: userID, identityID: identityID)
     }
-    private init(confirmedUserID: String, appleUserID: String) throws {
-        guard UUID(uuidString: confirmedUserID) != nil, !appleUserID.isEmpty else {
+    private init(confirmedUserID: String, identityID: String) throws {
+        guard UUID(uuidString: confirmedUserID) != nil, !identityID.isEmpty else {
             throw APIError.local("Не удалось определить локальные данные удаляемого аккаунта.")
         }
-        userID = confirmedUserID; self.appleUserID = appleUserID
+        userID = confirmedUserID; self.identityID = identityID
         commandID = UUID().uuidString.lowercased()
-        reauthToken = nil; confirmedByAppleLogin = true
+        reauthToken = nil; confirmedByLogin = true
     }
     func accepting(_ response: DeletionAccepted) throws -> Self {
         try response.validate()
@@ -69,28 +76,28 @@ struct AccountDeletionIntent: Codable, Equatable {
 }
 
 enum LocalAccountIdentity {
-    static func key(_ appleUserID: String) -> String {
-        "local-user-" + SHA256.hash(data: Data(appleUserID.utf8)).map { String(format: "%02x", $0) }.joined()
+    static func key(_ identityID: String) -> String {
+        "local-user-" + SHA256.hash(data: Data(identityID.utf8)).map { String(format: "%02x", $0) }.joined()
     }
-    static func save(userID: String, appleUserID: String) throws { try SecureStorage.save(userID, account: key(appleUserID)) }
-    static func load(_ appleUserID: String) throws -> String? { try SecureStorage.load(key(appleUserID)) }
-    static func previous(_ appleUserID: String) throws -> [String] {
-        try SecureStorage.load("previous-" + key(appleUserID)) ?? []
+    static func save(userID: String, identityID: String) throws { try SecureStorage.save(userID, account: key(identityID)) }
+    static func load(_ identityID: String) throws -> String? { try SecureStorage.load(key(identityID)) }
+    static func previous(_ identityID: String) throws -> [String] {
+        try SecureStorage.load("previous-" + key(identityID)) ?? []
     }
-    static func rememberPrevious(userID: String, appleUserID: String) throws {
+    static func rememberPrevious(userID: String, identityID: String) throws {
         guard UUID(uuidString: userID) != nil else { throw APIError.local("Некорректный прежний аккаунт.") }
-        var ids = try previous(appleUserID)
+        var ids = try previous(identityID)
         if !ids.contains(userID) { ids.append(userID) }
-        try SecureStorage.save(ids, account: "previous-" + key(appleUserID))
+        try SecureStorage.save(ids, account: "previous-" + key(identityID))
     }
-    static func removePrevious(userID: String, appleUserID: String) throws {
-        let ids = try previous(appleUserID).filter { $0 != userID }
-        if ids.isEmpty { try SecureStorage.remove("previous-" + key(appleUserID)) }
-        else { try SecureStorage.save(ids, account: "previous-" + key(appleUserID)) }
+    static func removePrevious(userID: String, identityID: String) throws {
+        let ids = try previous(identityID).filter { $0 != userID }
+        if ids.isEmpty { try SecureStorage.remove("previous-" + key(identityID)) }
+        else { try SecureStorage.save(ids, account: "previous-" + key(identityID)) }
     }
-    static func remove(userID: String, appleUserID: String) throws {
-        if try load(appleUserID) == userID { try SecureStorage.remove(key(appleUserID)) }
-        try removePrevious(userID: userID, appleUserID: appleUserID)
+    static func remove(userID: String, identityID: String) throws {
+        if try load(identityID) == userID { try SecureStorage.remove(key(identityID)) }
+        try removePrevious(userID: userID, identityID: identityID)
     }
 }
 
@@ -111,11 +118,11 @@ struct PreviousLocalAccount: Identifiable {
 }
 
 enum PreviousAccountCleanup {
-    static func validate(previousUserID: String, currentUserID: String, expectedAppleUserID: String,
-                         verifiedAppleUserID: String?, knownPreviousIDs: [String]) throws {
+    static func validate(previousUserID: String, currentUserID: String, expectedIdentityID: String,
+                         verifiedIdentityID: String?, knownPreviousIDs: [String]) throws {
         guard UUID(uuidString: previousUserID) != nil, previousUserID != currentUserID,
-              verifiedAppleUserID == expectedAppleUserID, knownPreviousIDs.contains(previousUserID) else {
-            throw APIError.local("Подтвердите текущий Apple Account. Данные действующего аккаунта удаляться не будут.")
+              verifiedIdentityID == expectedIdentityID, knownPreviousIDs.contains(previousUserID) else {
+            throw APIError.local("Подтвердите текущий аккаунт. Данные действующего аккаунта удаляться не будут.")
         }
     }
 }
@@ -131,5 +138,20 @@ enum HistoryIdentity {
         if let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return name }
         if let id, let member = members.first(where: { $0.user_id == id }) { return member.display_name }
         return "Без имени"
+    }
+}
+
+enum AccountIdentityStorage {
+    static func load() throws -> String? {
+        if let value: String = try SecureStorage.load("account-identity") { return value }
+        return try SecureStorage.load("apple-user")
+    }
+    static func save(_ identity: String) throws {
+        try SecureStorage.save(identity, account: "account-identity")
+        try SecureStorage.remove("apple-user")
+    }
+    static func clear() throws {
+        try SecureStorage.remove("account-identity")
+        try SecureStorage.remove("apple-user")
     }
 }

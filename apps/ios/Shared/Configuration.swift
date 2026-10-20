@@ -3,9 +3,22 @@ import Security
 
 enum AppConfiguration {
     static func value(_ key: String) -> String { Bundle.main.object(forInfoDictionaryKey: key) as? String ?? "" }
-    static var appGroup: String { value("CanAppGroup") }
-    static var keychainGroup: String { value("CanKeychainGroup") }
-    static var privateKeychainGroup: String { value("CanPrivateKeychainGroup") }
+    static var isSideload: Bool { value("CanDistribution") == "sideload" }
+    static var pushEnabled: Bool { value("CanPushEnabled") != "NO" }
+    private static let signedRights: [String: Any] = {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url) else { return [:] }
+        return SigningConfiguration.profileEntitlements(data) ?? [:]
+    }()
+    static var appGroup: String {
+        if isSideload, let group = SigningConfiguration.appGroup(signedRights) { return group }
+        return value("CanAppGroup")
+    }
+    static var keychainGroup: String { isSideload ? appGroup : value("CanKeychainGroup") }
+    static var privateKeychainGroup: String {
+        if isSideload, let group = signedRights["application-identifier"] as? String { return group }
+        return value("CanPrivateKeychainGroup")
+    }
     static var environment: String { "production" }
     static var baseURL: URL? {
         guard let url = URL(string: value("CanAPIBaseURL")), url.scheme == "https",
@@ -15,11 +28,33 @@ enum AppConfiguration {
     }
     static var issue: String? {
         guard baseURL != nil else { return "Адрес сервера Can ещё не настроен. Нужна подписанная сборка с адресом вашего сервера." }
+        #if !targetEnvironment(simulator)
+        if isSideload, SigningConfiguration.appGroup(signedRights) == nil || !(signedRights["application-identifier"] is String) {
+            return "Подпишите приложение через SideStore, сохранив расширение виджета и общую группу."
+        }
+        #endif
         guard !appGroup.isEmpty, !appGroup.contains("YOUR_"), !keychainGroup.isEmpty, !keychainGroup.contains("$("),
               !privateKeychainGroup.isEmpty, !privateKeychainGroup.contains("$(") else {
             return "Общая группа приложения и виджета ещё не настроена."
         }
         return nil
+    }
+}
+
+enum SigningConfiguration {
+    // SideStore rewrites bundle/group identifiers. The installed profile is inside
+    // the OS-validated app; only use it to select groups enforced by iOS itself.
+    static func profileEntitlements(_ data: Data) -> [String: Any]? {
+        guard data.count <= 2_000_000,
+              let start = data.range(of: Data("<?xml".utf8)),
+              let end = data.range(of: Data("</plist>".utf8), in: start.lowerBound..<data.endIndex),
+              let profile = try? PropertyListSerialization.propertyList(from: data[start.lowerBound..<end.upperBound], format: nil) as? [String: Any] else { return nil }
+        return profile["Entitlements"] as? [String: Any]
+    }
+    static func appGroup(_ rights: [String: Any]) -> String? {
+        guard let groups = rights["com.apple.security.application-groups"] as? [String],
+              groups.count == 1, groups[0].hasPrefix("group.") else { return nil }
+        return groups[0]
     }
 }
 

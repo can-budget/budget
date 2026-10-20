@@ -73,7 +73,6 @@ def rights(bundle="com.example.can"):
         "push",
         "groups",
         "keychain",
-        "apple",
     ],
 )
 def test_profiles_reject_wrong_distribution_or_capabilities(case):
@@ -98,8 +97,6 @@ def test_profiles_reject_wrong_distribution_or_capabilities(case):
         p["Entitlements"]["com.apple.security.application-groups"] = []
     if case == "keychain":
         r["keychain-access-groups"] = ["ABCDE12345.*"]
-    if case == "apple":
-        r.pop("com.apple.developer.applesignin")
     with pytest.raises(release.ReleaseError):
         release.validate_profile(p, r, CONFIG, CONFIG["CAN_BUNDLE_ID"], NOW)
 

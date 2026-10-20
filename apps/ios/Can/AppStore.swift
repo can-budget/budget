@@ -1,6 +1,4 @@
 import SwiftUI
-import AuthenticationServices
-import CryptoKit
 import WidgetKit
 import Network
 
@@ -12,7 +10,6 @@ final class AppStore: ObservableObject {
     @Published private(set) var offline = false
     @Published var needsSignIn = false
     @Published var message: String?
-    @Published var challenge: Challenge?
     @Published var invitation: Invitation?
     @Published var focusExpense = false
     @Published private(set) var deletionIntent: AccountDeletionIntent?
@@ -22,7 +19,7 @@ final class AppStore: ObservableObject {
     @Published private(set) var deletionAuthorizationReady = false
     @Published private(set) var deletionBusy = false
     @Published private(set) var localRecoveryFailure: String?
-    @Published private(set) var isAuthorizingApple = false
+    @Published private(set) var isSigningIn = false
     @Published private(set) var deletionHasReplacementAccount = false
     @Published private(set) var previousLocalAccounts: [PreviousLocalAccount] = []
     let api = APIClient()
@@ -32,16 +29,15 @@ final class AppStore: ObservableObject {
     private var failures = 0
     private var nextAttempt = Date.distantPast
     private var onlineBusy = false
-    private var authorizingChallenge: Challenge?
     private var deletionAccessToken: String?
     private var deletionAccessUserID: String?
-    private var verifiedAppleUserID: String?
+    private var verifiedIdentityID: String?
     private var reauthToken: String?
     private var reauthExpiresAt: Date?
     private var lastDeviceRegistration = Date.distantPast
     private var sessionGeneration = UUID()
     var deletionReauthenticationIsFresh: Bool { reauthToken != nil && (reauthExpiresAt ?? .distantPast) > Date() }
-    var previousCleanupReady: Bool { deletionReauthenticationIsFresh && verifiedAppleUserID != nil }
+    var previousCleanupReady: Bool { deletionReauthenticationIsFresh && verifiedIdentityID != nil }
     var navigationScope: String {
         if localRecoveryFailure != nil { return "local-recovery" }
         if let intent = deletionIntent { return "deletion-\(intent.commandID)" }
@@ -104,14 +100,13 @@ final class AppStore: ObservableObject {
                 user = restored
                 if deletionIntent != nil {
                     if restored.id != deletionIntent?.userID { state = try LocalStorage.load(restored.id) }
-                    let appleID: String? = try SecureStorage.load("apple-user")
-                    deletionHasReplacementAccount = restored.id != deletionIntent?.userID && appleID == deletionIntent?.appleUserID
+                    let appleID: String? = try AccountIdentityStorage.load()
+                    deletionHasReplacementAccount = restored.id != deletionIntent?.userID && appleID == deletionIntent?.identityID
                     if deletionHasReplacementAccount { deletionNeedsReauthentication = true }
                     await resumeDeletion(); setActive(true); return
                 }
                 state = try LocalStorage.load(restored.id)
                 try refreshPreviousLocalAccounts()
-                await checkAppleCredential()
                 await syncNow(force: true)
             }
             if deletionIntent != nil { await resumeDeletion(); setActive(true); return }
@@ -125,15 +120,14 @@ final class AppStore: ObservableObject {
         polling?.cancel(); polling = nil
         guard active else { return }
         polling = Task { [weak self] in
-            await self?.checkAppleCredential()
             while !Task.isCancelled {
                 await self?.syncNow()
                 try? await Task.sleep(for: .seconds(3))
             }
         }
     }
-    func appleCredentialRevoked() async {
-        // An accepted DELETE revokes Apple/session credentials as part of its normal work.
+    func sessionRevoked() async {
+        // An accepted DELETE revokes sessions as part of its normal work.
         // Its receipt proof remains usable independently, so do not discard that request.
         if deletionIntent != nil { return }
         sessionGeneration = UUID()
@@ -147,18 +141,6 @@ final class AppStore: ObservableObject {
         catch { message = error.localizedDescription }
         // Keep the protected, user-scoped outbox for a subsequent sign-in by its owner.
     }
-    private func checkAppleCredential() async {
-        guard user != nil, !needsSignIn,
-              let appleUser: String = try? SecureStorage.load("apple-user") else { return }
-        let generation = sessionGeneration
-        let credentialState: ASAuthorizationAppleIDProvider.CredentialState? = await withCheckedContinuation { continuation in
-            ASAuthorizationAppleIDProvider().getCredentialState(forUserID: appleUser) { value, error in
-                continuation.resume(returning: error == nil ? value : nil)
-            }
-        }
-        guard generation == sessionGeneration else { return }
-        if credentialState == .revoked || credentialState == .notFound { await appleCredentialRevoked() }
-    }
     private func mutate(_ body: (inout LocalState) throws -> Void) throws {
         guard deletionIntent == nil else { throw APIError.local("Сначала проверьте результат удаления аккаунта.") }
         guard var next = state else { throw APIError.local("Сначала войдите в приложение.") }
@@ -170,115 +152,52 @@ final class AppStore: ObservableObject {
         do { try mutate { if let amount { $0.draftAmount = amount }; if let kind { $0.draftKind = kind } } }
         catch { message = error.localizedDescription }
     }
-    func prepareApple() async {
-        do { challenge = try await api.request("/v1/auth/apple/challenge", method: "POST", authenticated: false) }
-        catch { if !RequestFailure.isCancellation(error) { message = error.localizedDescription } }
-    }
-    func configureApple(_ request: ASAuthorizationAppleIDRequest) {
-        guard let challenge else { return }
-        isAuthorizingApple = true
-        authorizingChallenge = challenge
-        request.requestedScopes = [.fullName]
-        request.nonce = SHA256.hash(data: Data(challenge.raw_nonce.utf8)).map { String(format: "%02x", $0) }.joined()
-    }
-    func completeApple(_ result: Result<ASAuthorization, Error>, reauthenticate: Bool = false) async {
+    func signIn(login name: String, password: String, reauthenticate: Bool = false) async throws {
+        guard !isSigningIn else { return }
+        isSigningIn = true
+        defer { isSigningIn = false }
         let generation = sessionGeneration
-        var knownDeletionIdentity: (userID: String, appleUserID: String)?
-        defer { authorizingChallenge = nil; isAuthorizingApple = false }
-        do {
-            let authorization = try result.get()
-            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                  let token = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }),
-                  let code = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) }),
-                  let challenge = authorizingChallenge else { throw APIError.local("Не получено подтверждение Apple. Повторите вход.") }
-            if let intent = deletionIntent {
-                guard !intent.needsCleanup, deletionNeedsReauthentication, credential.user == intent.appleUserID else {
-                    throw APIError.local("Для проверки удаления подтвердите тот же аккаунт Apple.")
-                }
+        let loginName = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let body: [String: JSONValue] = ["login": .string(loginName), "password": .string(password)]
+        let result: LoginResult = try await api.request("/v1/auth/password", method: "POST",
+            body: JSONEncoder().encode(body), authenticated: false)
+        guard generation == sessionGeneration else { throw CancellationError() }
+        // Identity follows the immutable server user ID, never a reusable login name.
+        let identityID = "local:" + result.user.id.lowercased()
+        if let intent = deletionIntent {
+            guard !intent.needsCleanup, deletionNeedsReauthentication,
+                  result.user.id == intent.userID, identityID == intent.identityID else {
+                throw APIError.local("Для повтора удаления войдите в тот же аккаунт.")
             }
-            let storedApple: String? = try SecureStorage.load("apple-user")
-            if reauthenticate, deletionIntent == nil, let storedApple, credential.user != storedApple {
-                throw APIError.local("Подтвердите тот же аккаунт Apple.")
-            }
-            if storedApple == credential.user, let userID = user?.id {
-                knownDeletionIdentity = (userID, credential.user)
-            } else if let userID = try LocalAccountIdentity.load(credential.user) {
-                knownDeletionIdentity = (userID, credential.user)
-            }
-            var body: [String: JSONValue] = ["challenge_id": .string(challenge.challenge_id), "id_token": .string(token),
-                                            "authorization_code": .string(code)]
-            if let name = credential.fullName {
-                let display = PersonNameComponentsFormatter().string(from: name).trimmingCharacters(in: .whitespacesAndNewlines)
-                if !display.isEmpty { body["display_name"] = .string(String(display.prefix(40))) }
-            }
-            let login: LoginResult = try await api.request("/v1/auth/apple", method: "POST", body: JSONEncoder().encode(body), authenticated: false)
-            guard generation == sessionGeneration else { throw CancellationError() }
-            if let intent = deletionIntent {
-                if login.user.id != intent.userID {
-                    try LocalAccountIdentity.rememberPrevious(userID: intent.userID, appleUserID: credential.user)
-                    let local = try LocalStorage.load(login.user.id)
-                    try SharedWidgetStorage.clear()
-                    WidgetCenter.shared.reloadAllTimelines()
-                    try await api.install(login)
-                    guard generation == sessionGeneration else { throw CancellationError() }
-                    try SecureStorage.save(credential.user, account: "apple-user")
-                    try LocalAccountIdentity.save(userID: login.user.id, appleUserID: credential.user)
-                    user = login.user; state = local; needsSignIn = false
-                    verifiedAppleUserID = credential.user
-                    reauthToken = login.reauth_token; reauthExpiresAt = BusinessTime.parse(login.reauth_expires_at)
-                    deletionAccessToken = nil; deletionAccessUserID = nil; deletionAuthorizationReady = false
-                    deletionHasReplacementAccount = true
-                    try refreshPreviousLocalAccounts()
-                    self.challenge = nil
-                    return
-                }
-                deletionAccessToken = login.session.access_token
-                deletionAccessUserID = login.user.id
-                verifiedAppleUserID = credential.user
-                reauthToken = login.reauth_token; reauthExpiresAt = BusinessTime.parse(login.reauth_expires_at)
-                deletionAuthorizationReady = true
-                self.challenge = nil
-                return
-            }
-            if reauthenticate, login.user.id != user?.id { throw APIError.local("Подтвердите тот же аккаунт Apple.") }
-            if let previous = knownDeletionIdentity?.userID, previous != login.user.id {
-                try LocalAccountIdentity.rememberPrevious(userID: previous, appleUserID: credential.user)
-            }
-            let local = try LocalStorage.load(login.user.id)
-            if user?.id != login.user.id {
-                try SharedWidgetStorage.clear()
-                WidgetCenter.shared.reloadAllTimelines()
-            }
-            sessionGeneration = UUID(); syncTask?.cancel(); syncTask = nil
-            try await api.install(login)
-            try SecureStorage.save(credential.user, account: "apple-user")
-            try LocalAccountIdentity.save(userID: login.user.id, appleUserID: credential.user)
-            user = login.user; state = local; needsSignIn = false
-            verifiedAppleUserID = credential.user
-            try refreshPreviousLocalAccounts()
-            reauthToken = login.reauth_token; reauthExpiresAt = BusinessTime.parse(login.reauth_expires_at)
-            deletionAuthorizationReady = reauthenticate
-            self.challenge = nil
-            await syncNow(force: true)
-            await registerDevice()
-        } catch is CancellationError { }
-        catch let error as ASAuthorizationError where error.code == .canceled { }
-        catch let error as APIError where error.code == "account_deletion_pending" {
-            guard generation == sessionGeneration else { return }
-            if let identity = knownDeletionIdentity {
-                do {
-                    let cleanup = try AccountDeletionIntent.confirmedDeletion(userID: identity.userID, appleUserID: identity.appleUserID)
-                    try DeletionStorage.save(cleanup)
-                    deletionIntent = cleanup
-                    try await finishAcceptedDeletion(cleanup)
-                } catch { message = error.localizedDescription }
-            } else { message = error.localizedDescription }
+            deletionAccessToken = result.session.access_token
+            deletionAccessUserID = result.user.id
+            verifiedIdentityID = identityID
+            reauthToken = result.reauth_token
+            reauthExpiresAt = BusinessTime.parse(result.reauth_expires_at)
+            deletionAuthorizationReady = true
+            return
         }
-        catch {
-            message = error.localizedDescription
-            challenge = nil
-            await prepareApple()
+        if reauthenticate, result.user.id != user?.id {
+            throw APIError.local("Подтвердите тот же аккаунт. Текущие данные сохранены.")
         }
+        let local = try LocalStorage.load(result.user.id)
+        if user?.id != result.user.id {
+            try SharedWidgetStorage.clear()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+        sessionGeneration = UUID(); syncTask?.cancel(); syncTask = nil
+        try await api.install(result)
+        try AccountIdentityStorage.save(identityID)
+        try SecureStorage.save(loginName, account: "login-name")
+        try LocalAccountIdentity.save(userID: result.user.id, identityID: identityID)
+        user = result.user; state = local; needsSignIn = false
+        verifiedIdentityID = identityID
+        try refreshPreviousLocalAccounts()
+        reauthToken = result.reauth_token
+        reauthExpiresAt = BusinessTime.parse(result.reauth_expires_at)
+        deletionAuthorizationReady = reauthenticate
+        await syncNow(force: true)
+        await registerDevice()
     }
     func enqueueEntry() throws {
         guard let state, let snapshot, let sprint = snapshot.sprint, let membershipID,
@@ -365,7 +284,7 @@ final class AppStore: ObservableObject {
             guard generation == sessionGeneration, !RequestFailure.isCancellation(error) else { return }
             failures = min(failures + 1, 6)
             nextAttempt = Date().addingTimeInterval(min(pow(2, Double(failures - 1)), 60) + Double.random(in: 0...0.8))
-            if let apiError = error as? APIError, apiError.code == "unauthorized" { await appleCredentialRevoked() }
+            if let apiError = error as? APIError, apiError.code == "unauthorized" { await sessionRevoked() }
             else if error is URLError { offline = true }
             else { message = error.localizedDescription }
         }
@@ -573,10 +492,10 @@ final class AppStore: ObservableObject {
     func deleteAccount() async throws {
         guard deletionIntent == nil, !deletionBusy, let user, let reauthToken,
               deletionAuthorizationReady, deletionReauthenticationIsFresh,
-              let appleUserID: String = try SecureStorage.load("apple-user") else {
-            throw APIError.local("Сначала подтвердите личность кнопкой Apple ниже.")
+              let identityID: String = try AccountIdentityStorage.load() else {
+            throw APIError.local("Сначала подтвердите личность паролем ниже.")
         }
-        let intent = try AccountDeletionIntent(userID: user.id, appleUserID: appleUserID, reauthToken: reauthToken)
+        let intent = try AccountDeletionIntent(userID: user.id, identityID: identityID, reauthToken: reauthToken)
         // Persist the exact replay proof before the destructive HTTP request can leave the device.
         try DeletionStorage.save(intent)
         deletionIntent = intent
@@ -596,7 +515,7 @@ final class AppStore: ObservableObject {
     }
     func prepareDeletionConfirmation() async {
         deletionAuthorizationReady = false
-        await prepareApple()
+        reauthToken = nil; reauthExpiresAt = nil
     }
     func resumeDeletion() async {
         guard let intent = deletionIntent, !deletionBusy else { return }
@@ -607,7 +526,7 @@ final class AppStore: ObservableObject {
         } catch {
             if let error = error as? APIError, error.code == "unauthorized" {
                 deletionNeedsReauthentication = true
-                message = "Принятие удаления не подтверждено. Сначала повторно проверьте запрос; если подтверждения нет, войдите тем же Apple Account и подтвердите повтор."
+                message = "Принятие удаления не подтверждено. Сначала повторно проверьте запрос; если подтверждения нет, войдите в тот же аккаунт и подтвердите повтор."
             } else { message = error.localizedDescription }
         }
     }
@@ -616,7 +535,7 @@ final class AppStore: ObservableObject {
               !deletionHasReplacementAccount, deletionAccessUserID == intent.userID,
               deletionNeedsReauthentication, deletionAuthorizationReady,
               deletionReauthenticationIsFresh, let token = reauthToken, let access = deletionAccessToken else {
-            throw APIError.local("Сначала подтвердите тот же аккаунт Apple.")
+            throw APIError.local("Сначала подтвердите тот же аккаунт.")
         }
         deletionBusy = true; defer { deletionBusy = false }
         // Always resolve the original proof first; an accepted request must keep its original proof.
@@ -664,27 +583,27 @@ final class AppStore: ObservableObject {
         try LocalStorage.remove(intent.userID)
         try SecureStorage.remove("device-\(intent.userID)")
         try DeletionStorage.clearArchive(intent.userID)
-        try LocalAccountIdentity.remove(userID: intent.userID, appleUserID: intent.appleUserID)
-        let appleUser: String? = try SecureStorage.load("apple-user")
-        if ownsVisibleSession, appleUser == intent.appleUserID { try SecureStorage.remove("apple-user") }
+        try LocalAccountIdentity.remove(userID: intent.userID, identityID: intent.identityID)
+        let appleUser: String? = try AccountIdentityStorage.load()
+        if ownsVisibleSession, appleUser == intent.identityID { try AccountIdentityStorage.clear() }
         if ownsVisibleSession {
             try SharedWidgetStorage.clear()
             try SecureStorage.remove("app-push")
             try SecureStorage.remove("widget-push", shared: true)
             user = nil; state = nil; needsSignIn = false
-            invitation = nil; challenge = nil; authorizingChallenge = nil
+            invitation = nil
             WidgetCenter.shared.reloadAllTimelines()
         }
         reauthToken = nil; reauthExpiresAt = nil
         deletionAccessToken = nil
-        deletionAccessUserID = nil; verifiedAppleUserID = nil
+        deletionAccessUserID = nil; verifiedIdentityID = nil
         deletionHasReplacementAccount = false
         deletionNeedsReauthentication = false; deletionAuthorizationReady = false
         lastDeviceRegistration = .distantPast
         try DeletionStorage.clear()
         deletionIntent = nil
         deletionReceipt = intent.accepted
-        deletionConfirmedElsewhere = intent.confirmedByAppleLogin == true
+        deletionConfirmedElsewhere = intent.confirmedByLogin == true
         try refreshPreviousLocalAccounts()
     }
     func dismissDeletionReceipt() {
@@ -693,7 +612,7 @@ final class AppStore: ObservableObject {
         setActive(true)
     }
     private func refreshPreviousLocalAccounts() throws {
-        guard let user, let appleID: String = try SecureStorage.load("apple-user"),
+        guard let user, let appleID: String = try AccountIdentityStorage.load(),
               try LocalAccountIdentity.load(appleID) == user.id else { previousLocalAccounts = []; return }
         previousLocalAccounts = try LocalAccountIdentity.previous(appleID).filter { $0 != user.id }.map { id in
             let local = try? LocalStorage.load(id)
@@ -703,7 +622,7 @@ final class AppStore: ObservableObject {
     }
     func continueWithReplacementAccount() throws {
         guard let intent = deletionIntent, !intent.needsCleanup, deletionHasReplacementAccount,
-              !deletionBusy, let user, user.id != intent.userID else { throw APIError.local("Сначала подтвердите тот же Apple Account.") }
+              !deletionBusy, let user, user.id != intent.userID else { throw APIError.local("Сначала подтвердите тот же аккаунт.") }
         try DeletionStorage.archive(intent)
         try DeletionStorage.clear()
         deletionIntent = nil
@@ -714,16 +633,16 @@ final class AppStore: ObservableObject {
         Task { await syncNow(force: true) }
     }
     func removePreviousLocalAccount(_ id: String) throws {
-        guard let user, let appleID: String = try SecureStorage.load("apple-user"),
-              previousCleanupReady, !deletionBusy else { throw APIError.local("Сначала подтвердите текущий Apple Account.") }
+        guard let user, let appleID: String = try AccountIdentityStorage.load(),
+              previousCleanupReady, !deletionBusy else { throw APIError.local("Сначала подтвердите текущий аккаунт.") }
         let previous = try LocalAccountIdentity.previous(appleID)
-        try PreviousAccountCleanup.validate(previousUserID: id, currentUserID: user.id, expectedAppleUserID: appleID,
-                                            verifiedAppleUserID: verifiedAppleUserID, knownPreviousIDs: previous)
+        try PreviousAccountCleanup.validate(previousUserID: id, currentUserID: user.id, expectedIdentityID: appleID,
+                                            verifiedIdentityID: verifiedIdentityID, knownPreviousIDs: previous)
         deletionBusy = true; defer { deletionBusy = false }
         try LocalStorage.remove(id)
         try SecureStorage.remove("device-\(id)")
         try DeletionStorage.clearArchive(id)
-        try LocalAccountIdentity.removePrevious(userID: id, appleUserID: appleID)
+        try LocalAccountIdentity.removePrevious(userID: id, identityID: appleID)
         if deletionIntent?.userID == id {
             try DeletionStorage.clear()
             deletionIntent = nil
@@ -741,7 +660,7 @@ final class AppStore: ObservableObject {
         deletionBusy = true; defer { deletionBusy = false }
         do {
             guard let intent = try DeletionStorage.archived(id), intent.userID == id,
-                  let appleID: String = try SecureStorage.load("apple-user"), intent.appleUserID == appleID else { return }
+                  let appleID: String = try AccountIdentityStorage.load(), intent.identityID == appleID else { return }
             for proof in intent.replayProofs {
                 do {
                     let response: DeletionAccepted = try await api.request("/v1/me", method: "DELETE", body: JSONEncoder().encode(intent.body),
@@ -776,8 +695,8 @@ final class AppStore: ObservableObject {
             let deviceID = try SecureStorage.load(account, as: String.self) ?? UUID().uuidString.lowercased()
             try SecureStorage.save(deviceID, account: account)
             let token: WidgetToken? = try SecureStorage.load("widget-read", shared: true)
-            let appPush: String? = try SecureStorage.load("app-push")
-            let widgetPush: String? = try SecureStorage.load("widget-push", shared: true)
+            let appPush: String? = AppConfiguration.pushEnabled ? try SecureStorage.load("app-push") : nil
+            let widgetPush: String? = AppConfiguration.pushEnabled ? try SecureStorage.load("widget-push", shared: true) : nil
             let registration: [String: JSONValue] = ["device_id": .string(deviceID),
                 "app_apns_token": appPush.map(JSONValue.string) ?? .null,
                 "widget_push_token": widgetPush.map(JSONValue.string) ?? .null,

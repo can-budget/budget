@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Can shared budget API
-  version: 1.3.0
+  version: 1.4.0
   description: Implementation contract for Can v1.1. Integer minor units, calculation versions 2/3,
     Asia/Shanghai business date. Product rules and reference calculations are unchanged.
     Technical clarifications are recorded in contracts/README.md. Account deletion
@@ -83,6 +83,84 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       security: []
+  /v1/auth/password:
+    post:
+      operationId: auth_password
+      summary: Sign in to an owner-provisioned private password account
+      description: No public registration. Invalid and unknown credentials return the same
+        error. Failed attempts consume IP, account and global limits. Password login also
+        returns a five-minute reauthentication proof for account deletion.
+      tags:
+      - auth
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResult'
+        '400':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                format: int64
+                minimum: 1
+              description: Seconds before retry
+        '503':
+          description: Structured failure. Preserve pending command on unknown outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLogin'
   /v1/auth/apple:
     post:
       operationId: auth_apple
@@ -2735,6 +2813,23 @@ components:
       - challenge_id
       - raw_nonce
       - expires_at
+      additionalProperties: false
+    PasswordLogin:
+      type: object
+      properties:
+        login:
+          type: string
+          minLength: 3
+          maxLength: 40
+          description: ASCII login; trimmed and normalized to lowercase by the server.
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
+      required:
+      - login
+      - password
       additionalProperties: false
     AppleLogin:
       type: object

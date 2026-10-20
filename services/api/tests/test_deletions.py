@@ -347,7 +347,7 @@ def test_readiness_checks_deletion_deadline_and_journal(monkeypatch, overdue, mo
 
     def query(_connection, sql):
         if "alembic_version" in sql:
-            return {"version_num": "0003"}
+            return {"version_num": "0004"}
         assert "interval '24 hours'" in sql
         return {"id": uuid4()} if overdue else None
 

@@ -179,11 +179,6 @@ def validate_profile(
         raise ReleaseError(
             f"Private/shared Keychain entitlement mismatch for {bundle}."
         )
-    if bundle == config["CAN_BUNDLE_ID"] and any(
-        "Default" not in source.get("com.apple.developer.applesignin", [])
-        for source in [allowed, rights]
-    ):
-        raise ReleaseError("The app's Sign in with Apple capability is missing.")
     expiry = profile.get("ExpirationDate")
     if not isinstance(expiry, datetime) or utc(expiry) <= now:
         raise ReleaseError(

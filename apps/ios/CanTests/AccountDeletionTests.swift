@@ -9,7 +9,7 @@ final class AccountDeletionTests: XCTestCase {
         primary_deletion_deadline: "2026-10-14T12:00:00Z", backup_retention_days: 30)
 
     func testUnconfirmedDeletionPersistsTheExactImmutableReplayRequest() throws {
-        let intent = try AccountDeletionIntent(userID: userID, appleUserID: "apple-subject", reauthToken: "original-proof", commandID: commandID)
+        let intent = try AccountDeletionIntent(userID: userID, identityID: "apple-subject", reauthToken: "original-proof", commandID: commandID)
         let restored = try JSONDecoder().decode(AccountDeletionIntent.self, from: JSONEncoder().encode(intent))
         XCTAssertEqual(restored, intent)
         XCTAssertEqual(restored.body, ["command_id": .string(commandID), "confirm_shared_history_changes": .bool(true)])
@@ -18,7 +18,7 @@ final class AccountDeletionTests: XCTestCase {
         XCTAssertNil(restored.accepted)
     }
     func testFreshReauthenticationPreservesOriginalProofForConcurrentLostAcceptedResponse() throws {
-        let initial = try AccountDeletionIntent(userID: userID, appleUserID: "apple-subject", reauthToken: "original-proof", commandID: commandID)
+        let initial = try AccountDeletionIntent(userID: userID, identityID: "apple-subject", reauthToken: "original-proof", commandID: commandID)
         let retried = try initial.replacingAuthorization("fresh-proof")
         let restored = try JSONDecoder().decode(AccountDeletionIntent.self, from: JSONEncoder().encode(retried))
         XCTAssertEqual(restored.commandID, initial.commandID)
@@ -27,7 +27,7 @@ final class AccountDeletionTests: XCTestCase {
         XCTAssertFalse(restored.needsCleanup)
     }
     func testAcceptedMarkerRetainsCleanupOwnerButErasesEveryReplayCredential() throws {
-        let pending = try AccountDeletionIntent(userID: userID, appleUserID: "apple-subject", reauthToken: "original-proof", commandID: commandID)
+        let pending = try AccountDeletionIntent(userID: userID, identityID: "apple-subject", reauthToken: "original-proof", commandID: commandID)
             .replacingAuthorization("fresh-proof")
         let accepted = try pending.accepting(receipt)
         let bytes = try JSONEncoder().encode(accepted)
@@ -41,7 +41,7 @@ final class AccountDeletionTests: XCTestCase {
         XCTAssertThrowsError(try recovered.replacingAuthorization("another-proof"))
     }
     func testMalformedAcceptedResponseCannotAuthorizeLocalErasure() throws {
-        let intent = try AccountDeletionIntent(userID: userID, appleUserID: "apple-subject", reauthToken: "proof", commandID: commandID)
+        let intent = try AccountDeletionIntent(userID: userID, identityID: "apple-subject", reauthToken: "proof", commandID: commandID)
         let invalid = [
             DeletionAccepted(job_id: "invalid", status: "accepted", primary_deletion_deadline: "2026-10-14T12:00:00Z", backup_retention_days: 30),
             DeletionAccepted(job_id: receipt.job_id, status: "unknown", primary_deletion_deadline: receipt.primary_deletion_deadline, backup_retention_days: 30),
@@ -53,11 +53,11 @@ final class AccountDeletionTests: XCTestCase {
         XCTAssertEqual(intent.replayProofs, ["proof"])
     }
     func testExplicitAuthenticatedDeletionEvidenceHasNoReplayAuthority() throws {
-        let evidence = try AccountDeletionIntent.confirmedDeletion(userID: userID, appleUserID: "apple-subject")
+        let evidence = try AccountDeletionIntent.confirmedDeletion(userID: userID, identityID: "apple-subject")
         XCTAssertTrue(evidence.needsCleanup)
         XCTAssertTrue(evidence.replayProofs.isEmpty)
         XCTAssertNil(evidence.accepted)
-        XCTAssertEqual(evidence.confirmedByAppleLogin, true)
+        XCTAssertEqual(evidence.confirmedByLogin, true)
         XCTAssertThrowsError(try evidence.replacingAuthorization("proof"))
     }
     func testScopedFileCleanupIsIdempotentAndPreservesAnotherAccountsQueue() throws {
@@ -111,15 +111,15 @@ final class AccountDeletionTests: XCTestCase {
     }
     func testPreviousLocalCleanupRequiresSameFreshIdentityAndCanNeverTargetCurrentUser() throws {
         XCTAssertNoThrow(try PreviousAccountCleanup.validate(previousUserID: userID, currentUserID: otherUserID,
-            expectedAppleUserID: "same-apple", verifiedAppleUserID: "same-apple", knownPreviousIDs: [userID]))
+            expectedIdentityID: "same-apple", verifiedIdentityID: "same-apple", knownPreviousIDs: [userID]))
         XCTAssertThrowsError(try PreviousAccountCleanup.validate(previousUserID: otherUserID, currentUserID: otherUserID,
-            expectedAppleUserID: "same-apple", verifiedAppleUserID: "same-apple", knownPreviousIDs: [otherUserID]))
+            expectedIdentityID: "same-apple", verifiedIdentityID: "same-apple", knownPreviousIDs: [otherUserID]))
         XCTAssertThrowsError(try PreviousAccountCleanup.validate(previousUserID: userID, currentUserID: otherUserID,
-            expectedAppleUserID: "same-apple", verifiedAppleUserID: "different-apple", knownPreviousIDs: [userID]))
+            expectedIdentityID: "same-apple", verifiedIdentityID: "different-apple", knownPreviousIDs: [userID]))
         XCTAssertThrowsError(try PreviousAccountCleanup.validate(previousUserID: userID, currentUserID: otherUserID,
-            expectedAppleUserID: "same-apple", verifiedAppleUserID: nil, knownPreviousIDs: [userID]))
+            expectedIdentityID: "same-apple", verifiedIdentityID: nil, knownPreviousIDs: [userID]))
         XCTAssertThrowsError(try PreviousAccountCleanup.validate(previousUserID: userID, currentUserID: otherUserID,
-            expectedAppleUserID: "same-apple", verifiedAppleUserID: "same-apple", knownPreviousIDs: []))
+            expectedIdentityID: "same-apple", verifiedIdentityID: "same-apple", knownPreviousIDs: []))
     }
     func testDeletingPreviousIncarnationCannotClearReplacementSessionAppleIdentityOrWidget() {
         XCTAssertFalse(AccountDeletionCleanupScope.clearsSharedCredentials(deletingUserID: userID, currentUserID: otherUserID))
