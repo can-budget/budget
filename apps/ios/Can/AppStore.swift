@@ -66,6 +66,10 @@ final class AppStore: ObservableObject {
         guard let state, let membershipID else { return projection }
         return (try? Reconciliation.projection(state, membershipID: membershipID, includingDraft: true)) ?? projection
     }
+    var draftExceedsBank: Bool {
+        guard let state else { return false }
+        return Reconciliation.draftExceedsBank(state, projection: projection)
+    }
     var statusText: String? {
         if needsSignIn { return "Войдите снова · записи на телефоне сохранены" }
         if activePending.contains(where: { $0.state == "needs_attention" }) { return "Есть записи, требующие внимания" }
@@ -282,6 +286,7 @@ final class AppStore: ObservableObject {
             throw APIError.local("Укажите сумму и действующий спринт.")
         }
         guard state.pending.count < 1000 else { throw APIError.local("В очереди 1000 записей. Ввод сохранён; сначала синхронизируйте очередь.") }
+        guard !draftExceedsBank else { throw APIError(code: "insufficient_funds", message: "", retryable: false) }
         let now = Date().addingTimeInterval(state.serverOffset)
         let command = Command("add_entry", ["entry_id": .string(UUID().uuidString.lowercased()), "sprint_id": .string(sprint.id),
                                            "membership_id": .string(membershipID), "kind": .string(state.draftKind),

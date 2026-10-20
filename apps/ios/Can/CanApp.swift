@@ -274,21 +274,28 @@ struct BudgetHomeView: View {
         }.frame(minHeight: 52)
     }
     private func hero(_ p: Projection) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(p.today_remaining_minor.map(Money.format) ?? "—")
+        let exceedsBank = store.draftExceedsBank
+        let amount = exceedsBank ? nil : p.today_remaining_minor
+        let text = amount.map(Money.format) ?? "—"
+        return VStack(alignment: .leading, spacing: 5) {
+            Text(text)
                 .font(.system(size: textSize.isAccessibilitySize ? 68 : 82, weight: .medium))
                 .tracking(-3).monospacedDigit().lineLimit(1).minimumScaleFactor(0.33)
-                .foregroundStyle((p.today_remaining_minor ?? 0) < 0 ? CanStyle.danger : .white)
-                .accessibilityLabel("На сегодня \(p.today_remaining_minor.map(Money.format) ?? "неизвестно")")
+                .foregroundStyle((amount ?? 0) < 0 ? CanStyle.danger : .white)
+                .accessibilityLabel("На сегодня \(text)")
                 .accessibilityIdentifier("budget.today")
-                .accessibilityValue(p.today_remaining_minor.map(Money.format) ?? "—")
+                .accessibilityValue(text)
             Text("На сегодня").font(.system(size: 18)).foregroundStyle(.secondary)
             Rectangle().fill(CanStyle.separator).frame(height: 0.5).padding(.top, 20).padding(.bottom, 12)
-            if let amount = p.today_remaining_minor, amount < 0 {
+            if exceedsBank {
+                Text("В банке только \(Money.format(max(0, projection?.bank_minor ?? 0))) · уменьшите расход")
+                    .font(.caption).foregroundStyle(CanStyle.danger).accessibilityIdentifier("expense.bank-limit")
+            } else if let amount, amount < 0 {
                 VStack(alignment: .leading, spacing: 4) {
                     if let next = BudgetDisplay.nextDay(bank: p.bank_minor, days: p.days_remaining) {
-                        Text("Дальше \(Money.format(next)) в день").foregroundStyle(CanStyle.danger)
-                        Text("Если сегодня больше не тратить").foregroundStyle(.secondary)
+                        Text("С завтрашнего дня \(Money.format(next)) в день").foregroundStyle(CanStyle.danger)
+                        Text("Останется \(Money.format(p.bank_minor)) на \(BudgetDisplay.days(p.days_remaining - 1))")
+                            .foregroundStyle(.secondary)
                     } else { Text("Последний день").foregroundStyle(CanStyle.danger) }
                 }.font(.caption)
             }
@@ -364,7 +371,7 @@ struct BudgetHomeView: View {
                             .simultaneousGesture(TapGesture(count: 2).onEnded { store.setDraft("") })
                             .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in store.setDraft("") })
                             .accessibilityAction(named: Text("Очистить сумму")) { store.setDraft("") }
-                        ExpenseSubmitButton(enabled: (Money.parse(store.state?.draftAmount ?? "") ?? 0) > 0) {
+                        ExpenseSubmitButton(enabled: (Money.parse(store.state?.draftAmount ?? "") ?? 0) > 0 && !store.draftExceedsBank) {
                             do { try store.enqueueEntry(); UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                             catch { store.message = error.localizedDescription }
                         }
