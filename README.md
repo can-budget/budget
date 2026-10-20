@@ -77,6 +77,22 @@ one explicitly. These commands do not upload a build or provision owner accounts
 Configure app identifiers, App Group, Keychain group and API URL using the iOS
 configuration instructions before running against your server.
 
+For manual Ad Hoc delivery to the owner's two registered iPhones:
+
+```sh
+make ios-doctor
+make ios-release
+make ios-inspect
+make ios-devices
+make ios-install IOS_DEVICE="iPhone name"
+```
+
+This requires a paid Apple team and signing setup; these are not configured yet.
+The helper exports locally, verifies app/widget signing and actual expiration,
+records the result under ignored `build/ios-adhoc/`, and installs on the selected
+registered device. It does not upload to TestFlight or uninstall the existing
+app. See [the one-time setup and release procedure](docs/IOS_DELIVERY.md).
+
 For an interactive owner-operated test before Apple activation, run
 `make ios-simulator` or open `apps/ios/Run Simulator.command`. This creates a
 separate synthetic account on the current API through owner SSH and imports an

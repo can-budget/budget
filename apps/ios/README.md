@@ -2,6 +2,17 @@
 
 Нативный SwiftUI проект для iPhone с iOS 17+, один production API, пользовательский вход через Apple. Откройте `Can.xcodeproj`, выберите общую схему `Can`. XcodeGen, CocoaPods и сторонние Swift-пакеты не требуются. Для текущей загрузки в App Store Connect нужен Xcode 26+ с iOS 26 SDK; минимальная версия ОС приложения остаётся 17.0. В CI выбран Xcode 26.3.
 
+## Установка на два iPhone: ручной Ad Hoc
+
+Из корня репозитория: `make ios-doctor`, `make ios-release`, `make ios-inspect`.
+После подключения телефона: `make ios-devices`, затем
+`make ios-install IOS_DEVICE="Имя iPhone"`. Для второго телефона повторить установку.
+`.ipa`, архив, логи и отчёт со сроками подписи сохраняются в `build/ios-adhoc/`.
+Нужны платная команда Apple, заполненные идентификаторы ниже, signing identities
+и оба телефона в Ad Hoc profiles приложения/виджета. Пока членство не оформлено,
+подписанный установочный файл выпустить нельзя. Подробности —
+[однократная настройка и обычный выпуск](../../docs/IOS_DELIVERY.md).
+
 ## Интерактивная проверка на Mac без Apple Developer
 
 Требуются Xcode, установленный iOS Simulator runtime и уже разрешённый SSH-доступ владельца к серверу (`budget`). Runtime устанавливается через Xcode → Settings → Components → iOS. Отдельный backend и локальная база не нужны.
