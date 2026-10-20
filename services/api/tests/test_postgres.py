@@ -414,7 +414,7 @@ def test_completed_recovery_requires_explicit_confirmation(postgres):
         )
         execute(
             c,
-            "UPDATE sprints SET start_date=:day,initial_end_date=:day,end_date=:day WHERE id=:id",
+            "UPDATE sprints SET start_date=:day,initial_end_date=:day,end_date=:day,topups_today_from=:day WHERE id=:id",
             day=yesterday,
             id=sprint,
         )
@@ -440,3 +440,98 @@ def test_completed_recovery_requires_explicit_confirmation(postgres):
     ).json()
     assert result["projection"]["bank_minor"] == 999_900
     assert result["projection"]["status"] == "completed"
+
+
+def test_full_today_topup_survives_receipt_replay_and_correction(postgres):
+    client, headers, cabinet, sprint, membership = setup_budget(postgres)
+    body = purchase(sprint, membership, 2000)
+    body["payload"]["kind"] = "topup"
+    path = f"/v1/cabinets/{cabinet}/commands"
+    first = client.post(path, headers=headers, json=body)
+    assert first.status_code == 200, first.text
+    assert client.post(path, headers=headers, json=body).json() == first.json()
+    sync = client.post(
+        f"/v1/cabinets/{cabinet}/sync",
+        headers=headers,
+        json={"unresolved_command_ids": [body["command_id"]]},
+    ).json()
+    state = sync["snapshot"]
+    assert state["sprint"]["calculation_version"] == 3
+    assert state["sprint"]["topups_today_from"] == str(business_date())
+    assert state["projection"]["today_remaining_minor"] == 102000
+    assert state["projection"]["bank_minor"] == 1002000
+    assert sync["receipts"][0]["status"] == "applied"
+    with postgres.connect() as c:
+        assert one(c, "SELECT count(*) AS count FROM entries")["count"] == 1
+
+
+def test_policy_migration_preserves_past_days_closed_sprints_and_entry_amounts(postgres):
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    from can_api.ledger import projection_data
+
+    today = business_date()
+    yesterday = today - timedelta(days=1)
+    cabinet, active, closed = uuid4(), uuid4(), uuid4()
+    migration = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    with postgres.begin() as c:
+        # Recreate the pre-upgrade shape only inside the fixture's disposable schema.
+        execute(c, "ALTER TABLE sprints DROP CONSTRAINT topups_today_policy")
+        execute(c, "ALTER TABLE sprints DROP COLUMN topups_today_from")
+        execute(c, "ALTER TABLE sprints DROP CONSTRAINT sprints_calculation_version_check")
+        execute(
+            c,
+            "ALTER TABLE sprints ADD CONSTRAINT sprints_calculation_version_check CHECK (calculation_version=2)",
+        )
+        execute(c, "UPDATE alembic_version SET version_num='0002'")
+        execute(
+            c,
+            "INSERT INTO cabinets(id,name,timezone,revision) VALUES (:id,'Migration','Asia/Shanghai',7)",
+            id=cabinet,
+        )
+        for sprint, start, end, finished in [
+            (active, yesterday, today + timedelta(days=8), False),
+            (closed, today - timedelta(days=20), today - timedelta(days=11), True),
+        ]:
+            execute(
+                c,
+                """INSERT INTO sprints(id,cabinet_id,initial_minor,start_date,initial_end_date,end_date,closed_at)
+                VALUES (:id,:cabinet,200000,:start,:end,:end,CASE WHEN :finished THEN now() ELSE NULL END)""",
+                id=sprint,
+                cabinet=cabinet,
+                start=start,
+                end=end,
+                finished=finished,
+            )
+        for day in (yesterday, today):
+            execute(
+                c,
+                """INSERT INTO entries(id,cabinet_id,sprint_id,kind,amount_minor,occurred_at,effective_day,created_revision,updated_revision)
+                VALUES (:id,:cabinet,:sprint,'topup',2000,now(),:day,1,1)""",
+                id=uuid4(),
+                cabinet=cabinet,
+                sprint=active,
+                day=day,
+            )
+        before = one(c, "SELECT * FROM sprints WHERE id=:id", id=active)
+        prior_day = projection_data(c, before, yesterday)["projection"]
+        prior_bank = projection_data(c, before, today)["projection"]["bank_minor"]
+        migration.attributes["connection"] = c
+        command.upgrade(migration, "head")
+        command.upgrade(migration, "head")
+        after = one(c, "SELECT * FROM sprints WHERE id=:id", id=active)
+        assert after["calculation_version"] == 3
+        assert after["topups_today_from"] == today
+        assert projection_data(c, after, yesterday)["projection"] == prior_day
+        assert projection_data(c, after, today)["projection"]["bank_minor"] == prior_bank
+        assert (
+            one(c, "SELECT calculation_version FROM sprints WHERE id=:id", id=closed)[
+                "calculation_version"
+            ]
+            == 2
+        )
+        assert one(c, "SELECT revision FROM cabinets WHERE id=:id", id=cabinet)["revision"] == 8
+        assert one(c, "SELECT sum(amount_minor) AS total FROM entries")["total"] == 4000

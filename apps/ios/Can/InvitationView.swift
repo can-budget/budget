@@ -39,31 +39,43 @@ struct InvitationView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Text("Вместе можно").font(.largeTitle.bold())
-                Text("У всех участников одинаковые права").foregroundStyle(.secondary)
-                if let image {
-                    Image(uiImage: image).interpolation(.none).resizable().scaledToFit().padding(20)
-                        .background(.white, in: RoundedRectangle(cornerRadius: 24)).frame(maxWidth: 300)
-                        .accessibilityLabel("QR приглашения")
+                Spacer(minLength: 12)
+                VStack(spacing: 20) {
+                    if let image {
+                        Image(uiImage: image).interpolation(.none).resizable().scaledToFit().padding(22)
+                            .frame(maxWidth: 290).accessibilityLabel("QR приглашения")
+                    }
+                    Button {
+                        UIPasteboard.general.string = invitation.code; copied = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text(invitation.code).font(.system(size: 25, weight: .medium, design: .monospaced))
+                            Image(systemName: copied ? "checkmark" : "square.on.square").font(.body)
+                        }.foregroundStyle(.black)
+                    }.accessibilityLabel(copied ? "Код скопирован" : "Скопировать код")
+                    Text("24 часа · одно подключение").font(.footnote).foregroundStyle(Color.black.opacity(0.55))
+                }.frame(maxWidth: .infinity).padding(.vertical, 28).background(.white, in: RoundedRectangle(cornerRadius: 24))
+                if let expiry = BusinessTime.parse(invitation.expires_at) {
+                    Text("До \(BudgetDisplay.date(BusinessTime.day(expiry))), \(BudgetDisplay.time(expiry))").font(.footnote).foregroundStyle(.secondary)
                 }
-                Text(invitation.code).font(.system(.title, design: .monospaced).bold()).textSelection(.enabled)
-                Text("Действует до \(invitation.expires_at)").font(.caption).foregroundStyle(.secondary)
-                HStack {
+                Spacer(minLength: 12)
+                VStack(spacing: 12) {
                     Button(copied ? "Скопировано" : "Скопировать код") { UIPasteboard.general.string = invitation.code; copied = true }
-                    Button("Поделиться", systemImage: "square.and.arrow.up") { restoreBrightness(); sharing = true }
-                }.buttonStyle(.bordered)
-                AsyncButton("Отозвать приглашение", busy: $busy) {
-                    _ = try await store.onlineCommand("revoke_invitation", payload: ["invitation_id": .string(invitation.id)])
-                    dismiss()
-                }.foregroundStyle(.red)
-                Spacer()
-            }.padding(24).navigationTitle("Приглашение")
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } } }
+                        .buttonStyle(CanPrimaryButtonStyle())
+                    Button("Поделиться QR и кодом", systemImage: "square.and.arrow.up") { restoreBrightness(); sharing = true }
+                        .buttonStyle(CanSecondaryButtonStyle())
+                    AsyncButton("Отозвать приглашение", busy: $busy) {
+                        _ = try await store.onlineCommand("revoke_invitation", payload: ["invitation_id": .string(invitation.id)])
+                        dismiss()
+                    }.font(.footnote).foregroundStyle(CanStyle.danger).frame(minHeight: 35)
+                }
+            }.padding(24).canScreen().navigationTitle("Пригласить")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() }.foregroundStyle(.secondary) } }
         }
         .onAppear { boostBrightness() }.onDisappear { restoreBrightness() }
         .onChange(of: scenePhase) { _, phase in if phase == .active && !sharing { boostBrightness() } else { restoreBrightness() } }
         .sheet(isPresented: $sharing, onDismiss: { if scenePhase == .active { boostBrightness() } }) {
-            ShareSheet(items: (image.map { [$0 as Any] } ?? []) + ["Приглашение в Can. Код: \(invitation.code). Действует 24 часа."])
+            ShareSheet(items: (image.map { [$0 as Any] } ?? []) + ["Приглашение в Можно. Код: \(invitation.code). Действует 24 часа."])
         }
     }
     private func boostBrightness() {

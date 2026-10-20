@@ -33,7 +33,7 @@ from .ledger import (
 )
 from .security import digest, encrypt, identity, invitation_digest, now, rate_limit, token
 
-app = FastAPI(title="Can shared budget API", version="1.1.1")
+app = FastAPI(title="Can shared budget API", version="1.2.0")
 app.include_router(auth_router)
 
 
@@ -92,7 +92,7 @@ async def limit_requests(request: Request, call_next):
 
 @app.get("/health/live")
 def live():
-    return {"status": "ok", "version": "1.1.1"}
+    return {"status": "ok", "version": "1.2.0"}
 
 
 @app.get("/health/ready")
@@ -100,7 +100,7 @@ def ready():
     try:
         with engine().connect() as c:
             value = one(c, "SELECT version_num FROM alembic_version")
-            require(value and value["version_num"] == "0002", "schema_not_ready", 503)
+            require(value and value["version_num"] == "0003", "schema_not_ready", 503)
             overdue = one(
                 c,
                 "SELECT id FROM deletion_jobs WHERE status <> 'done' AND requested_at < now()-interval '24 hours' LIMIT 1",
@@ -112,7 +112,7 @@ def ready():
             check_health()
     except SQLAlchemyError as exc:
         raise Problem("database_unavailable", 503, retryable=True) from exc
-    return {"status": "ok", "version": "1.1.1", "recovery_mode": settings().recovery_mode}
+    return {"status": "ok", "version": "1.2.0", "recovery_mode": settings().recovery_mode}
 
 
 @app.post("/v1/cabinets", status_code=201)
@@ -498,7 +498,7 @@ def widget_snapshot(c: DB, authorization: Bearer = None):
         "server_time": state["server_time"],
         "business_date": state["business_date"],
         "cabinet_revision": state["cabinet_revision"],
-        "calculation_version": 2,
+        "calculation_version": state["sprint"]["calculation_version"] if state["sprint"] else 2,
         "status": projection["status"] if projection else "no_sprint",
         "today_remaining_minor": projection["today_remaining_minor"] if projection else None,
         "bank_minor": projection["bank_minor"] if projection else None,

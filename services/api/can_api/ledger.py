@@ -88,7 +88,10 @@ def sprint_json(sprint: dict, day: date | None = None) -> dict:
             "initial_end_date",
             "calculation_version",
         )
-    } | {"status": "completed" if (day or business_date()) > sprint["end_date"] else "active"}
+    } | {
+        "status": "completed" if (day or business_date()) > sprint["end_date"] else "active",
+        "topups_today_from": sprint.get("topups_today_from"),
+    }
 
 
 def get_sprint(c: Connection, cabinet_id: Any, sprint_id: Any) -> dict:
@@ -144,6 +147,11 @@ def projection_data(c: Connection, sprint: dict, day: date | None = None) -> dic
         ],
         "choices": {str(row["day"]): row["mode"] for row in carries},
     }
+    if sprint["calculation_version"] == 3:
+        require(sprint.get("topups_today_from") is not None, "invalid_ledger", 422)
+        data["topups_today_from"] = str(sprint["topups_today_from"])
+    else:
+        require(sprint["calculation_version"] == 2, "invalid_ledger", 422)
     try:
         projection = project(data)
     except ValueError as exc:
@@ -347,8 +355,8 @@ def mutate(c: Connection, user_id: Any, cabinet: dict, membership: dict, command
         )
         execute(
             c,
-            """INSERT INTO sprints(id,cabinet_id,initial_minor,start_date,initial_end_date,end_date,creator_id)
-            VALUES (:id,:cabinet,:initial,:start,:end,:end,:user)""",
+            """INSERT INTO sprints(id,cabinet_id,initial_minor,start_date,initial_end_date,end_date,creator_id,calculation_version,topups_today_from)
+            VALUES (:id,:cabinet,:initial,:start,:end,:end,:user,3,:start)""",
             id=p["sprint_id"],
             cabinet=cabinet_id,
             initial=p["initial_minor"],

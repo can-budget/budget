@@ -72,6 +72,8 @@ struct SharedWidgetState: Codable {
     var pendingCount: Int
     var carryPending: Bool
     var status: String
+    var daysRemaining: Int? = nil
+    var isOffline: Bool? = nil
 }
 enum SharedWidgetStorage {
     static func url(_ file: String = "snapshot.json") -> URL? {

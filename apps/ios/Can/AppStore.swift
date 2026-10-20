@@ -62,6 +62,10 @@ final class AppStore: ObservableObject {
         guard let state, let membershipID else { return snapshot?.projection }
         return try? Reconciliation.projection(state, membershipID: membershipID)
     }
+    var draftProjection: Projection? {
+        guard let state, let membershipID else { return projection }
+        return (try? Reconciliation.projection(state, membershipID: membershipID, includingDraft: true)) ?? projection
+    }
     var statusText: String? {
         if needsSignIn { return "Войдите снова · записи на телефоне сохранены" }
         if activePending.contains(where: { $0.state == "needs_attention" }) { return "Есть записи, требующие внимания" }
@@ -86,6 +90,12 @@ final class AppStore: ObservableObject {
         do { deletionIntent = try DeletionStorage.load(); localRecoveryFailure = nil }
         catch { localRecoveryFailure = "Не удалось прочитать защищённое состояние удаления. Разблокируйте iPhone и повторите. \(error.localizedDescription)"; return }
         do {
+            #if DEBUG && targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--can-import-simulator-session") {
+                guard deletionIntent == nil else { throw APIError.local("Сначала завершите удаление прежнего аккаунта.") }
+                try await SimulatorSessionImport.install(using: api)
+            }
+            #endif
             if let restored = try await api.restore() {
                 user = restored
                 if deletionIntent != nil {
@@ -101,7 +111,10 @@ final class AppStore: ObservableObject {
                 await syncNow(force: true)
             }
             if deletionIntent != nil { await resumeDeletion(); setActive(true); return }
-        } catch { message = error.localizedDescription }
+        } catch {
+            guard !RequestFailure.isCancellation(error) else { return }
+            message = error.localizedDescription
+        }
         setActive(true)
     }
     func setActive(_ active: Bool) {
@@ -155,7 +168,7 @@ final class AppStore: ObservableObject {
     }
     func prepareApple() async {
         do { challenge = try await api.request("/v1/auth/apple/challenge", method: "POST", authenticated: false) }
-        catch { message = error.localizedDescription }
+        catch { if !RequestFailure.isCancellation(error) { message = error.localizedDescription } }
     }
     func configureApple(_ request: ASAuthorizationAppleIDRequest) {
         guard let challenge else { return }
@@ -344,7 +357,7 @@ final class AppStore: ObservableObject {
             updateWidget()
             await registerDevice()
         } catch {
-            guard generation == sessionGeneration else { return }
+            guard generation == sessionGeneration, !RequestFailure.isCancellation(error) else { return }
             failures = min(failures + 1, 6)
             nextAttempt = Date().addingTimeInterval(min(pow(2, Double(failures - 1)), 60) + Double.random(in: 0...0.8))
             if let apiError = error as? APIError, apiError.code == "unauthorized" { await appleCredentialRevoked() }
@@ -734,7 +747,8 @@ final class AppStore: ObservableObject {
                                       businessDate: max(snapshot.business_date, BusinessTime.day(Date().addingTimeInterval(state.serverOffset))),
                                       calculatedAt: Date(), lastSyncAt: last, todayMinor: p?.today_remaining_minor,
                                       bankMinor: p?.bank_minor, pendingCount: pendingCount,
-                                      carryPending: p?.carry_status == "pending", status: p?.status ?? "no_sprint")
+                                      carryPending: p?.carry_status == "pending", status: p?.status ?? "no_sprint",
+                                      daysRemaining: p?.days_remaining, isOffline: offline)
         do { try SharedWidgetStorage.save(shared); WidgetCenter.shared.reloadAllTimelines() }
         catch { message = "Запись сохранена. Не удалось обновить виджет: \(error.localizedDescription)" }
     }

@@ -63,7 +63,7 @@ embed = add("embed-widget", isa="PBXCopyFilesBuildPhase", buildActionMask="21474
 for name in products:
     source = [p for p in paths if p.startswith(name + "/") and p.endswith(".swift")]
     if name != "CanTests": source += shared
-    resources = ["CanTests/golden_cases.json"] if name == "CanTests" else ["Shared/PrivacyInfo.xcprivacy"]
+    resources = ["CanTests/golden_cases.json", "CanTests/today_topup_cases.json"] if name == "CanTests" else ["Shared/PrivacyInfo.xcprivacy"]
     if name == "Can": resources += ["Can/Assets.xcassets"]
     phases = [phase(name, "Sources", source, "PBXSourcesBuildPhase"), phase(name, "Frameworks", [], "PBXFrameworksBuildPhase"), phase(name, "Resources", resources, "PBXResourcesBuildPhase")]
     if name == "Can": phases.append(embed)

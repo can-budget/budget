@@ -1,9 +1,10 @@
 PYTHON ?= .venv/bin/python
 export IOS_DESTINATION
 API_ROOT := services/api
+SIMULATOR_TOOLS := apps/ios/tools/run_simulator.py apps/ios/tools/issue_simulator_session.py
 export PYTHONPATH := $(CURDIR)/$(API_ROOT)
 
-.PHONY: install dev test test-unit test-postgres test-one reference-check contract-check infra-check infra-test ios-project-check secret-check lint format typecheck verify ios-test ios-build
+.PHONY: install dev test test-unit test-postgres test-one reference-check contract-check infra-check infra-test ios-project-check secret-check lint format typecheck verify ios-test ios-build ios-simulator
 install:
 	python3 scripts/bootstrap.py
 	$(PYTHON) -m pip install -c services/api/requirements-dev.lock -e './services/api[dev]'
@@ -33,9 +34,9 @@ ios-project-check:
 secret-check:
 	$(PYTHON) scripts/check_secrets.py
 lint:
-	$(PYTHON) -m ruff check --config services/api/pyproject.toml services/api scripts infra
+	$(PYTHON) -m ruff check --config services/api/pyproject.toml services/api scripts infra $(SIMULATOR_TOOLS)
 format:
-	$(PYTHON) -m ruff format --config services/api/pyproject.toml services/api scripts infra
+	$(PYTHON) -m ruff format --config services/api/pyproject.toml services/api scripts infra $(SIMULATOR_TOOLS)
 typecheck:
 	$(PYTHON) -m mypy --config-file services/api/pyproject.toml services/api/can_api
 verify: lint typecheck test-unit reference-check contract-check infra-check infra-test ios-project-check secret-check
@@ -43,3 +44,5 @@ ios-test:
 	bash infra/scripts/ios-test.sh
 ios-build:
 	xcodebuild -project apps/ios/Can.xcodeproj -scheme Can -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build
+ios-simulator:
+	python3 apps/ios/tools/run_simulator.py $(SIMULATOR_ARGS)

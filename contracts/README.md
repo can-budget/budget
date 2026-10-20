@@ -1,9 +1,9 @@
-# Implementation contract 1.1.1
+# Implementation contract 1.2.0
 
 `openapi.yaml` is the active API contract. The complete supplied v1.1 package in
 `Can_Developer_Handoff_v1.1/` remains unchanged, including its calculation engine
-and fixtures. These changes clarify transport and reconciliation; they do not
-change budget rules.
+and fixtures. The original transport clarifications are listed below. The owner
+approved an additional same-day topup policy on 2026-10-20.
 
 - Cabinet timezone is fixed to `Asia/Shanghai`, as required by the product rules.
 - `User.active_membership_id` and `Member.membership_id` identify the membership
@@ -49,3 +49,18 @@ change budget rules.
 `make contract-check` validates both the original handoff and this contract with
 date/UUID format checking and negative receipt/recovery cases. PostgreSQL and
 native client tests cover behavior beyond JSON Schema validation.
+
+## Same-day topups — calculation version 3
+
+Version 3 adds the entire topup to its effective day's allowance. Bank accounting,
+carry decisions, signed bank corrections and integer rounding remain unchanged.
+Sprint `topups_today_from` is the cutoff: earlier days replay version 2 arithmetic;
+closed legacy sprints stay version 2. Migration 0003 upgrades active sprints at
+the current Shanghai business date and advances their cabinet revisions. No entry,
+amount, receipt or carry decision is rewritten. New sprints start at version 3.
+Clients must use the supplied version and cutoff for both local previews and
+pending projections. A draft never enters the queue or widget snapshot; Enter
+queues exactly one immutable entry. Both versions remain accepted by WidgetKit.
+
+The original 240 version-2 fixtures remain unchanged. Shared `today_topup_cases.json`
+adds 12 version-3 examples used by both Python and Swift tests.
