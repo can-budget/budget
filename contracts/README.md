@@ -1,4 +1,4 @@
-# Implementation contract 1.3.0
+# Implementation contract 1.4.0
 
 `openapi.yaml` is the active API contract. The complete supplied v1.1 package in
 `Can_Developer_Handoff_v1.1/` remains unchanged, including its calculation engine
@@ -30,7 +30,7 @@ approved an additional same-day topup policy on 2026-10-20.
   adjustments and carry choices do not change. Identity removal also covers
   embedded audit/receipt data, credentials, memberships and private device data;
   a nullable `author_id` alone does not implement the policy.
-- `DELETE /v1/me` requires explicit confirmation and fresh Apple reauthentication
+- `DELETE /v1/me` requires explicit confirmation and fresh same-user reauthentication
   on first acceptance. A 202 acknowledges the durable deletion job, not its final
   completion. The original command ID, body and reauthentication proof allow an
   exact accepted-request retry after session revocation. That narrow capability
@@ -101,3 +101,20 @@ The client waits for the confirmed snapshot before forgetting the durable start
 intent. A snapshot switching budgets clears the previous draft and excludes old
 queued entries from the new budget while preserving their immutable commands.
 No schema migration or automatic reset of an existing budget is performed.
+
+## Private password login
+
+The owner selected free SideStore delivery on 2026-10-20 and approved migration
+0004. `POST /v1/auth/password` accepts an owner-provisioned login and password and
+returns the existing LoginResult/session/reauthentication format. It does not
+register accounts. Existing Apple routes remain compatible for legacy clients;
+the current iPhone UI uses password login, including account-deletion confirmation.
+
+Logins are canonical ASCII strings; passwords are salted PBKDF2-HMAC-SHA256 hashes
+with 600,000 rounds. Unknown and wrong credentials share the same error and KDF
+cost. Failed attempts consume separately committed IP, login and global limits.
+Password reset revokes sessions/widget tokens and old reauthentication proofs;
+login serializes against reset/deletion and rechecks the credential version.
+Migration 0004 adds local_credentials and permits NULL apple_subject; existing
+accounts and financial records are unchanged. Account erasure cascades to local
+credentials without requiring an Apple revocation for a password-only account.

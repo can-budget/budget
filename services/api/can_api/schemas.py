@@ -7,8 +7,10 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    SecretStr,
     StrictBool,
     StrictInt,
+    field_validator,
     model_validator,
 )
 
@@ -47,6 +49,18 @@ class AppleLogin(StrictModel):
     id_token: str
     authorization_code: str
     display_name: Name | None = None
+
+
+class PasswordLogin(StrictModel):
+    login: Annotated[str, Field(min_length=3, max_length=40)]
+    password: Annotated[SecretStr, Field(min_length=1, max_length=128)]
+
+    @field_validator("login")
+    @classmethod
+    def normalized_login(cls, value: str) -> str:
+        from .passwords import normalize_login
+
+        return normalize_login(value)
 
 
 class RefreshRequest(StrictModel):

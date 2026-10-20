@@ -1,5 +1,25 @@
 # Implementation and deployment verification
 
+## Private password login and free SideStore package — 2026-10-20
+
+The owner rejected paid Apple membership and selected free SideStore delivery for
+iPhone 16e and 16 Pro Max, reporting iOS 26.7.1. Password login replaces Apple
+sign-in in the iPhone UI; accounts are provisioned only through owner CLI.
+Migration 0004 was explicitly approved for checked CI/CD deployment. Legacy
+Apple API endpoints remain available; financial records are not migrated.
+
+Local `make verify` passed 318 API unit tests and 220 infrastructure tests plus
+contracts/static checks. `make ios-test` passed 54 XCTest; `make ios-build` and
+`make ios-sideload` compiled the app and widget. The produced IPA is an input for
+SideStore, without Apple provisioning, and passed local signature/ZIP checks.
+Real PostgreSQL cases are delegated to disposable CI. Deployment evidence is
+recorded with the PR/workflow once completed.
+
+Real SideStore signing, installation, both widgets and autonomous refresh on the
+two physical phones have not been verified. Background refresh requires Wi-Fi,
+LocalDevVPN and working device pairing; the package itself cannot prove that
+these conditions will remain satisfied. See [delivery procedure](IOS_DELIVERY.md).
+
 ## Live calculator and same-day topups — 2026-10-20
 
 The owner approved a live draft preview, full-area Enter button, removal of the

@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import AuthenticationServices
 
 extension Notification.Name {
     static let canBackgroundRefresh = Notification.Name("can.background.refresh")
@@ -9,7 +8,7 @@ extension Notification.Name {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     weak var store: AppStore?
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        application.registerForRemoteNotifications()
+        if AppConfiguration.pushEnabled { application.registerForRemoteNotifications() }
         return true
     }
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken token: Data) {
@@ -47,9 +46,7 @@ struct CanApp: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .canBackgroundRefresh)) { _ in Task { await store.syncNow(force: true) } }
                 .onReceive(NotificationCenter.default.publisher(for: .canPushRegistered)) { _ in Task { await store.registerDevice(force: true) } }
-                .onReceive(NotificationCenter.default.publisher(for: ASAuthorizationAppleIDProvider.credentialRevokedNotification)) { _ in
-                    Task { await store.appleCredentialRevoked() }
-                }
+
         }
     }
 }
@@ -85,39 +82,57 @@ struct RootView: View {
     }
 }
 struct WelcomeView: View {
-    @EnvironmentObject private var store: AppStore
     @State private var privacy = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Spacer()
-            Text("Можно").font(.system(size: 56, weight: .semibold)).tracking(-2)
-            Text("Один бюджет.\nНа каждый день.").font(.title2).foregroundStyle(.secondary)
-            Spacer()
-            AppleButton().frame(height: 54)
-            Button("Об использовании данных") { privacy = true }
-                .font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 44)
-            if store.challenge == nil {
-                Button("Подготовить вход") { Task { await store.prepareApple() } }.font(.footnote)
-            }
-        }.padding(28).task { await store.prepareApple() }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Можно").font(.system(size: 56, weight: .semibold)).tracking(-2).padding(.top, 70)
+                Text("Один бюджет.\nНа каждый день.").font(.title2).foregroundStyle(.secondary)
+                PasswordSignInForm().padding(.top, 32)
+                Button("Об использовании данных") { privacy = true }
+                    .font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 44)
+            }.padding(28)
+        }.scrollDismissesKeyboard(.interactively)
             .sheet(isPresented: $privacy) { PrivacyView() }
     }
 }
-struct AppleButton: View {
+
+struct PasswordSignInForm: View {
     @EnvironmentObject private var store: AppStore
     var reauthenticate = false
+    @State private var login = ""
+    @State private var password = ""
+    @State private var busy = false
     var body: some View {
-        SignInWithAppleButton(.continue, onRequest: store.configureApple) { result in
-            Task { await store.completeApple(result, reauthenticate: reauthenticate) }
-        }
-        .signInWithAppleButtonStyle(.white).clipShape(RoundedRectangle(cornerRadius: 14))
-        .disabled(store.challenge == nil || store.isAuthorizingApple)
-        .task {
-            while !Task.isCancelled {
-                if let challenge = store.challenge,
-                   (BusinessTime.parse(challenge.expires_at) ?? .distantPast) < Date().addingTimeInterval(45) { await store.prepareApple() }
-                try? await Task.sleep(for: .seconds(20))
-            }
+        VStack(alignment: .leading, spacing: 16) {
+            TextField("Логин", text: $login)
+                .textContentType(.username).textInputAutocapitalization(.never).autocorrectionDisabled()
+                .accessibilityIdentifier("login.name")
+            Divider()
+            SecureField("Пароль", text: $password).textContentType(.password)
+                .accessibilityIdentifier("login.password")
+                .onSubmit { submit() }
+            Divider()
+            Button { submit() } label: {
+                HStack {
+                    Text(reauthenticate ? "Подтвердить пароль" : "Войти")
+                    Spacer()
+                    if busy { ProgressView() } else { Image(systemName: "arrow.right") }
+                }.frame(minHeight: 24).contentShape(Rectangle())
+            }.buttonStyle(CanPrimaryButtonStyle())
+                .disabled(busy || store.isSigningIn || login.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty)
+                .accessibilityIdentifier("login.submit")
+        }.onAppear { login = (try? SecureStorage.load("login-name", as: String.self)) ?? "" }
+            .onDisappear { password = "" }
+    }
+    private func submit() {
+        guard !busy, !store.isSigningIn, !password.isEmpty, !login.isEmpty else { return }
+        busy = true
+        let entered = password
+        Task {
+            defer { busy = false; password = "" }
+            do { try await store.signIn(login: login, password: entered, reauthenticate: reauthenticate) }
+            catch { if !RequestFailure.isCancellation(error) { store.message = error.localizedDescription } }
         }
     }
 }

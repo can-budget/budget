@@ -115,7 +115,7 @@ struct ProfileView: View {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(store.user?.display_name ?? "Профиль").font(.largeTitle.weight(.semibold)).tracking(-0.7)
-                    Text("Вход через Apple").font(.subheadline).foregroundStyle(.secondary)
+                    Text("Вход по логину и паролю").font(.subheadline).foregroundStyle(.secondary)
                 }.padding(.vertical, 12)
             }.listRowBackground(Color.clear)
             Section("Имя") {
@@ -132,7 +132,7 @@ struct ProfileView: View {
                 Button("Выйти и сохранить очередь на телефоне", role: .destructive) {
                     Task { do { try await store.logout() } catch { store.message = error.localizedDescription } }
                 }
-            } message: { Text("Неотправленные записи сохранятся только для этого аккаунта на этом iPhone. Отправка продолжится после входа тем же Apple Account. Для отзыва сессии нужна сеть.") }
+            } message: { Text("Неотправленные записи сохранятся только для этого аккаунта на этом iPhone. Отправка продолжится после входа в тот же аккаунт. Для отзыва сессии нужна сеть.") }
     }
 }
 
@@ -288,7 +288,7 @@ struct PrivacyView: View {
         NavigationStack {
             List {
                 Section("Что хранится") { Text("Имя, суммы и даты хранятся на вашем сервере для общего бюджета. На iPhone хранится защищённая локальная очередь и снимок бюджета. Это не сквозное шифрование.") }
-                Section("Доступ") { Text("Бюджет доступен активным участникам кабинета. Вход выполняется только через Apple. Виджет получает отдельный доступ только к краткому остатку.") }
+                Section("Доступ") { Text("Бюджет доступен активным участникам кабинета. Вход по личному логину и паролю. Виджет получает отдельный доступ только к краткому остатку.") }
                 Section("Камера") { Text("Камера включается только для сканирования приглашения. Кадры не сохраняются и не отправляются на сервер.") }
                 Section("Выход и удаление") { Text("Выход из кабинета сохраняет общий журнал; выход из аккаунта отзывает сессию. При удалении аккаунта имя и связь с ним стираются. Операции, суммы и даты остаются в общем журнале без имени; баланс других участников не меняется.") }
             }.canScreen().navigationTitle("Об использовании данных").toolbar { Button("Закрыть") { dismiss() } }
@@ -303,7 +303,7 @@ struct DeletionView: View {
     var body: some View {
         Form {
             Section("Что будет удалено") {
-                Text("Ваш аккаунт, имя, связь с Apple Account и доступ к кабинетам. После принятия запроса вы выйдете на всех устройствах.")
+                Text("Ваш аккаунт, имя, логин и пароль и доступ к кабинетам. После принятия запроса вы выйдете на всех устройствах.")
                 Text("С этого iPhone будут удалены данные этого аккаунта, ключи доступа и локальная очередь. Данные других аккаунтов на телефоне не затрагиваются.")
             }
             Section("Что останется в общем бюджете") {
@@ -319,9 +319,9 @@ struct DeletionView: View {
                 }
             }
             Section("Подтвердите личность") {
-                AppleButton(reauthenticate: true).frame(height: 50)
+                PasswordSignInForm(reauthenticate: true)
                 if store.deletionAuthorizationReady { Label("Личность подтверждена", systemImage: "checkmark.circle") }
-                Button("Обновить подтверждение Apple") { Task { await store.prepareDeletionConfirmation() } }
+                Button("Обновить подтверждение паролем") { Task { await store.prepareDeletionConfirmation() } }
             }
             Button("Удалить мой аккаунт", role: .destructive) { confirmation = true }
                 .disabled(busy || !store.deletionAuthorizationReady || !store.deletionReauthenticationIsFresh)
@@ -358,8 +358,8 @@ struct DeletionProgressView: View {
                 }.disabled(store.deletionBusy)
             }
             if store.deletionHasReplacementAccount, let oldID = store.deletionIntent?.userID {
-                Section("Apple подтвердил новый аккаунт") {
-                    Text("Для того же Apple Account сервер вернул новый аккаунт. Это может быть связано с удалением или восстановлением сервера; само по себе это не подтверждает удаление прежнего аккаунта.")
+                Section("Сервер вернул новый аккаунт") {
+                    Text("После подтверждения личности сервер вернул новый аккаунт. Это может быть связано с удалением или восстановлением сервера; само по себе это не подтверждает удаление прежнего аккаунта.")
                     Text("Прежняя локальная очередь скрыта и не отправляется в новый бюджет. Вы можете сохранить её или удалить только с этого iPhone. Запрос удаления нового аккаунта не отправляется.")
                     if let count = store.previousLocalAccounts.first(where: { $0.id == oldID })?.pendingCount {
                         Text("Ожидающих записей и действий в прежних данных: \(count).")
@@ -368,17 +368,17 @@ struct DeletionProgressView: View {
                         do { try store.continueWithReplacementAccount() } catch { store.message = error.localizedDescription }
                     }.disabled(store.deletionBusy)
                     if !store.previousCleanupReady {
-                        AppleButton(reauthenticate: true).frame(height: 50)
-                        Button("Подготовить подтверждение Apple") { Task { await store.prepareApple() } }
+                        PasswordSignInForm(reauthenticate: true)
+                        Button("Подготовить подтверждение паролем") { Task { await store.prepareDeletionConfirmation() } }
                     }
                     Button("Удалить прежние данные с этого iPhone", role: .destructive) { localConfirmation = true }
                         .disabled(store.deletionBusy || !store.previousCleanupReady)
                 }
             } else if store.deletionNeedsReauthentication, store.deletionIntent?.needsCleanup == false {
-                Section("Подтвердите тот же Apple Account") {
-                    Text("Если сервер ещё не принял запрос, для повтора нужно свежее подтверждение Apple. Отсутствие доступа само по себе не означает, что аккаунт удалён.")
-                    AppleButton(reauthenticate: true).frame(height: 50).disabled(store.deletionBusy)
-                    Button("Подготовить подтверждение Apple") { Task { await store.prepareApple() } }
+                Section("Подтвердите тот же аккаунт") {
+                    Text("Если сервер ещё не принял запрос, для повтора нужно свежее подтверждение паролем. Отсутствие доступа само по себе не означает, что аккаунт удалён.")
+                    PasswordSignInForm(reauthenticate: true).disabled(store.deletionBusy)
+                    Button("Подготовить подтверждение паролем") { Task { await store.prepareDeletionConfirmation() } }
                     if store.deletionAuthorizationReady {
                         Button("Подтвердить повтор удаления", role: .destructive) { confirmation = true }
                             .disabled(store.deletionBusy || !store.deletionReauthenticationIsFresh)
@@ -387,7 +387,7 @@ struct DeletionProgressView: View {
             }
         }.navigationTitle("Удаление аккаунта")
             .navigationBarBackButtonHidden()
-            .task { if store.deletionNeedsReauthentication { await store.prepareApple() } }
+            .task { if store.deletionNeedsReauthentication { await store.prepareDeletionConfirmation() } }
             .confirmationDialog("Повторить подтверждённое удаление?", isPresented: $confirmation, titleVisibility: .visible) {
                 Button("Подтвердить удаление", role: .destructive) {
                     Task { do { try await store.retryDeletionWithFreshAuthorization() } catch { store.message = error.localizedDescription } }
@@ -408,7 +408,7 @@ struct PreviousLocalDataView: View {
     var body: some View {
         List {
             Section {
-                Text("После входа тем же Apple Account сервер вернул другой аккаунт. Прежние данные сохранены отдельно: они скрыты из бюджета и не отправляются от нового аккаунта.")
+                Text("После входа в тот же аккаунт сервер вернул другой аккаунт. Прежние данные сохранены отдельно: они скрыты из бюджета и не отправляются от нового аккаунта.")
                 Text("Причина смены может быть связана с восстановлением сервера. Разница аккаунтов сама по себе не подтверждает удаление. Очистка ниже действует только на этот iPhone.")
             }
             ForEach(Array(store.previousLocalAccounts.enumerated()), id: \.element.id) { index, item in
@@ -425,13 +425,13 @@ struct PreviousLocalDataView: View {
             }
             if store.previousLocalAccounts.isEmpty { Text("Прежних локальных данных нет.") }
             if !store.previousCleanupReady, !store.previousLocalAccounts.isEmpty {
-                Section("Подтвердите текущий Apple Account") {
-                    AppleButton(reauthenticate: true).frame(height: 50)
-                    Button("Подготовить подтверждение Apple") { Task { await store.prepareApple() } }
+                Section("Подтвердите текущий аккаунт") {
+                    PasswordSignInForm(reauthenticate: true)
+                    Button("Подготовить подтверждение паролем") { Task { await store.prepareDeletionConfirmation() } }
                 }
             }
         }.navigationTitle("Прежние данные")
-            .task { if !store.previousCleanupReady { await store.prepareApple() } }
+            .task { if !store.previousCleanupReady { await store.prepareDeletionConfirmation() } }
             .confirmationDialog("Удалить прежние данные только с этого iPhone?", isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } }), titleVisibility: .visible) {
                 Button("Удалить прежний набор", role: .destructive) {
                     guard let item = selected else { return }

@@ -31,9 +31,10 @@ from .ledger import (
     store_receipt,
     sync,
 )
+from .passwords import normalize_login
 from .security import digest, encrypt, identity, invitation_digest, now, rate_limit, token
 
-app = FastAPI(title="Can shared budget API", version="1.3.0")
+app = FastAPI(title="Can shared budget API", version="1.4.0")
 app.include_router(auth_router)
 
 
@@ -71,6 +72,14 @@ async def private_responses(request: Request, call_next):
 @app.middleware("http")
 async def limit_requests(request: Request, call_next):
     if request.method in ("POST", "PATCH", "DELETE"):
+        password_login = None
+        if request.url.path == "/v1/auth/password":
+            try:
+                body = await request.json()
+                if isinstance(body, dict) and isinstance(body.get("login"), str):
+                    password_login = normalize_login(body["login"])
+            except ValueError:
+                pass
         # Separate committed transaction: invalid credentials/codes also consume the limit.
         try:
             with engine().begin() as c:
@@ -81,6 +90,10 @@ async def limit_requests(request: Request, call_next):
                 rate_limit(
                     c, f"{request.client.host if request.client else 'unknown'}:{path}", limit
                 )
+                if path == "/v1/auth/password":
+                    rate_limit(c, "password-login:global", 60)
+                    if password_login is not None:
+                        rate_limit(c, "password-login:" + password_login, 10)
         except Problem as error:
             return JSONResponse(error.body, status_code=error.status, headers={"Retry-After": "60"})
         except SQLAlchemyError:
@@ -92,7 +105,7 @@ async def limit_requests(request: Request, call_next):
 
 @app.get("/health/live")
 def live():
-    return {"status": "ok", "version": "1.3.0"}
+    return {"status": "ok", "version": "1.4.0"}
 
 
 @app.get("/health/ready")
@@ -100,7 +113,7 @@ def ready():
     try:
         with engine().connect() as c:
             value = one(c, "SELECT version_num FROM alembic_version")
-            require(value and value["version_num"] == "0003", "schema_not_ready", 503)
+            require(value and value["version_num"] == "0004", "schema_not_ready", 503)
             overdue = one(
                 c,
                 "SELECT id FROM deletion_jobs WHERE status <> 'done' AND requested_at < now()-interval '24 hours' LIMIT 1",
@@ -112,7 +125,7 @@ def ready():
             check_health()
     except SQLAlchemyError as exc:
         raise Problem("database_unavailable", 503, retryable=True) from exc
-    return {"status": "ok", "version": "1.3.0", "recovery_mode": settings().recovery_mode}
+    return {"status": "ok", "version": "1.4.0", "recovery_mode": settings().recovery_mode}
 
 
 @app.post("/v1/cabinets", status_code=201)

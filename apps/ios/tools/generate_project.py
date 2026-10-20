@@ -44,7 +44,7 @@ def phase(target, name, files, isa):
 def configs(target, settings):
     result = []
     for config in ["Debug", "Release"]:
-        base = {**settings, "CAN_APNS_ENVIRONMENT": "sandbox" if config == "Debug" else "production",
+        base = {**settings, "CAN_DISTRIBUTION": "owner", "CAN_PUSH_ENABLED": "YES", "CAN_APNS_ENVIRONMENT": "sandbox" if config == "Debug" else "production",
                 "CAN_APNS_ENTITLEMENT_ENVIRONMENT": "development" if config == "Debug" else "production"}
         base.update({"SWIFT_OPTIMIZATION_LEVEL": "-Onone" if config == "Debug" else "-O", "DEBUG_INFORMATION_FORMAT": "dwarf" if config == "Debug" else "dwarf-with-dsym"})
         if config == "Debug": base.update({"SWIFT_ACTIVE_COMPILATION_CONDITIONS": "DEBUG", "ENABLE_TESTABILITY": "YES"})

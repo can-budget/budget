@@ -173,8 +173,8 @@ def queue_deletion(c: Connection, user: dict, command_id=None, proof_hash=None) 
     execute(
         c,
         """INSERT INTO deletion_jobs(id,user_id,restore_tombstone_ciphertext,encryption_key_id,status,
-        requested_at,purge_tombstone_after,command_id,reauth_proof_hash,accepted_json,apple_tokens_ciphertext,apple_tokens_unavailable)
-        VALUES (:id,:user,:tombstone,'configured','pending',:requested,:purge,:command,:proof,CAST(:accepted AS jsonb),:tokens,:unavailable)""",
+        requested_at,purge_tombstone_after,command_id,reauth_proof_hash,accepted_json,apple_tokens_ciphertext,apple_tokens_unavailable,apple_revocation_state)
+        VALUES (:id,:user,:tombstone,'configured','pending',:requested,:purge,:command,:proof,CAST(:accepted AS jsonb),:tokens,:unavailable,:revocation)""",
         id=job_id,
         user=user["id"],
         tombstone=encrypt(encode(tombstone)),
@@ -185,6 +185,9 @@ def queue_deletion(c: Connection, user: dict, command_id=None, proof_hash=None) 
         accepted=encode(response),
         tokens=encrypt(encode(tokens)),
         unavailable=unavailable,
+        revocation="done"
+        if not user.get("apple_subject") and not tokens and not unavailable
+        else "pending",
     )
     execute(
         c,
@@ -247,7 +250,9 @@ def erase_account(c: Connection, tombstone: dict) -> bool:
         str(row["command_id"])
         for row in rows(c, "SELECT command_id FROM command_receipts WHERE user_id=:id", id=user_id)
     }
-    identifiers = {user_id, user["apple_subject"]} | membership_ids | command_ids
+    identifiers = {user_id} | membership_ids | command_ids
+    if user["apple_subject"]:
+        identifiers.add(user["apple_subject"])
     # All affected cabinets are locked before touching shared audit/results.
     cabinet_ids = rows(
         c,
