@@ -74,6 +74,75 @@ final class DraftPreviewTests: XCTestCase {
         XCTAssertEqual(try Reconciliation.projection(state, membershipID: "member", now: afterEnd, includingDraft: true),
                        try Reconciliation.projection(state, membershipID: "member", now: afterEnd))
     }
+    func testExpenseCanExceedDailyAllowanceButNotTheBank() throws {
+        var state = try fixture()
+        let base = try XCTUnwrap(Reconciliation.projection(state, membershipID: "member", now: now))
+        state.draftAmount = "201"
+        XCTAssertFalse(Reconciliation.draftExceedsBank(state, projection: base))
+        let dailyOverspend = try XCTUnwrap(Reconciliation.projection(state, membershipID: "member", now: now, includingDraft: true))
+        XCTAssertEqual(dailyOverspend.today_remaining_minor, -100)
+        XCTAssertEqual(dailyOverspend.bank_minor, 179900)
+        XCTAssertEqual(BudgetDisplay.nextDay(bank: dailyOverspend.bank_minor, days: dailyOverspend.days_remaining), 19988)
+        state.draftAmount = "2000"
+        XCTAssertFalse(Reconciliation.draftExceedsBank(state, projection: base))
+        let exhausted = try XCTUnwrap(Reconciliation.projection(state, membershipID: "member", now: now, includingDraft: true))
+        XCTAssertEqual(exhausted.bank_minor, 0)
+        XCTAssertEqual(BudgetDisplay.nextDay(bank: exhausted.bank_minor, days: exhausted.days_remaining), 0)
+        state.draftAmount = "2000,01"
+        XCTAssertTrue(Reconciliation.draftExceedsBank(state, projection: base))
+        XCTAssertEqual(try Reconciliation.projection(state, membershipID: "member", now: now, includingDraft: true), base)
+        XCTAssertEqual(state.draftAmount, "2000,01")
+        XCTAssertTrue(state.pending.isEmpty)
+    }
+    func testBankLimitIncludesPendingEntriesAndDoesNotLimitTopups() throws {
+        var state = try fixture()
+        state.pending = [pending(kind: "expense", amount: 50000)]
+        state.draftAmount = "1500"
+        var base = try XCTUnwrap(Reconciliation.projection(state, membershipID: "member", now: now))
+        XCTAssertFalse(Reconciliation.draftExceedsBank(state, projection: base))
+        state.draftAmount = "1500,01"
+        XCTAssertTrue(Reconciliation.draftExceedsBank(state, projection: base))
+        state.draftKind = "topup"
+        XCTAssertFalse(Reconciliation.draftExceedsBank(state, projection: base))
+        XCTAssertEqual(try Reconciliation.projection(state, membershipID: "member", now: now, includingDraft: true)?.bank_minor, 300001)
+        state.draftKind = "expense"
+        state.pending = [pending(kind: "topup", amount: 10000)]
+        base = try XCTUnwrap(Reconciliation.projection(state, membershipID: "member", now: now))
+        state.draftAmount = "2100"
+        XCTAssertFalse(Reconciliation.draftExceedsBank(state, projection: base))
+        state.draftAmount = "2100,01"
+        XCTAssertTrue(Reconciliation.draftExceedsBank(state, projection: base))
+    }
+    func testEmptyBankRejectsPositiveExpenseAndAllowsTopup() throws {
+        var state = try fixture(expense: 200000)
+        let base = try XCTUnwrap(Reconciliation.projection(state, membershipID: "member", now: now))
+        XCTAssertEqual(base.bank_minor, 0)
+        state.draftAmount = "0,01"
+        XCTAssertTrue(Reconciliation.draftExceedsBank(state, projection: base))
+        state.draftKind = "topup"
+        XCTAssertFalse(Reconciliation.draftExceedsBank(state, projection: base))
+        XCTAssertEqual(try Reconciliation.projection(state, membershipID: "member", now: now, includingDraft: true)?.bank_minor, 1)
+    }
+    func testTodaysCarryDoesNotBecomeTheBaseAllowanceForEveryFutureDay() throws {
+        let input = BudgetInput(initial_minor: 250000, start_date: "2026-10-19", end_date: "2026-10-30", as_of_date: "2026-10-20",
+            days: [DayInput(day: "2026-10-19", topups_minor: 0, expenses_minor: 5000),
+                   DayInput(day: "2026-10-20", topups_minor: 2000, expenses_minor: 15400)],
+            choices: ["2026-10-20": "today"],
+            revisions: [RevisionInput(effective_day: "2026-10-20", sequence: 1, bank_adjustment_minor: 0, end_date: "2026-11-14"),
+                        RevisionInput(effective_day: "2026-10-20", sequence: 2, bank_adjustment_minor: 868400, end_date: "2026-11-18")])
+        let base = try BudgetCalculation.project(input, topupsTodayFrom: "2026-10-20")
+        XCTAssertEqual(base.bank_minor, 1100000)
+        XCTAssertEqual(base.today_remaining_minor, 39017)
+        XCTAssertEqual(base.days_remaining, 30)
+        let afterExpense = BudgetInput(initial_minor: input.initial_minor, start_date: input.start_date,
+            end_date: input.end_date, as_of_date: input.as_of_date,
+            days: [input.days![0], DayInput(day: "2026-10-20", topups_minor: 2000, expenses_minor: 54900)],
+            choices: input.choices, revisions: input.revisions)
+        let result = try BudgetCalculation.project(afterExpense, topupsTodayFrom: "2026-10-20")
+        XCTAssertEqual(result.today_remaining_minor, -483)
+        XCTAssertEqual(result.bank_minor, 1060500)
+        XCTAssertEqual(BudgetDisplay.nextDay(bank: result.bank_minor, days: result.days_remaining), 36568)
+    }
     private func fixture(topup: Int64 = 0, expense: Int64 = 0, revision: Int64 = 1) throws -> LocalState {
         let input = BudgetInput(initial_minor: 200000, start_date: "2026-10-20", end_date: "2026-10-29", as_of_date: "2026-10-20",
                                 days: [DayInput(day: "2026-10-20", topups_minor: topup, expenses_minor: expense)], choices: [:], revisions: [])

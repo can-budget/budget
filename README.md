@@ -28,6 +28,15 @@ No categories, bank integrations, administrator role, alternative login or
 multiple active cabinets are introduced. Amounts use integer minor units;
 business dates use `Asia/Shanghai`. Version 2 preserves historical calculations;
 version 3 adds topups fully to their effective day from each sprint's recorded cutoff.
+Expenses may exceed today's allowance using the remaining bank, but cannot make
+the total bank negative. The app checks drafts against the bank including local
+pending entries; the server checks mutations under the cabinet lock. Corrections,
+topup cancellations and balance edits cannot bypass this limit. Rejected commands
+retain their rejection on replay. Existing historical negative balances are kept
+and can be reduced, but cannot be made more negative by new entry mutations.
+The forecast for tomorrow divides the bank after the draft expense by the number
+of days after today; today's carry and same-day topups can make today's allowance
+different from that future daily amount.
 
 ## Local verification
 

@@ -164,6 +164,137 @@ def test_bank_target_fixed_delta_noop_and_late_entry(postgres):
         )
 
 
+def test_bank_limit_exact_zero_and_rejected_receipt_replay(postgres):
+    client, headers, cabinet, sprint, membership = setup_budget(postgres)
+    path = f"/v1/cabinets/{cabinet}/commands"
+    body = purchase(sprint, membership, 1_000_001)
+    first = client.post(path, headers=headers, json=body)
+    assert first.status_code == 409 and first.json()["code"] == "insufficient_funds"
+    # A later topup cannot turn a rejected immutable command into an applied command.
+    topup = purchase(sprint, membership, 100)
+    topup["payload"]["kind"] = "topup"
+    assert client.post(path, headers=headers, json=topup).status_code == 200
+    assert client.post(path, headers=headers, json=body).json() == first.json()
+    exact = purchase(sprint, membership, 1_000_100)
+    assert client.post(path, headers=headers, json=exact).status_code == 200
+    state = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    assert state["projection"]["bank_minor"] == 0
+    revision = state["cabinet_revision"]
+    excess = client.post(path, headers=headers, json=purchase(sprint, membership, 1))
+    assert excess.status_code == 409 and excess.json()["code"] == "insufficient_funds"
+    unchanged = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    assert unchanged["projection"] == state["projection"]
+    assert unchanged["cabinet_revision"] == revision
+    sync = client.post(
+        f"/v1/cabinets/{cabinet}/sync",
+        headers=headers,
+        json={"unresolved_command_ids": [body["command_id"]]},
+    ).json()
+    assert sync["receipts"][0]["status"] == "rejected"
+    assert sync["receipts"][0]["error"]["code"] == "insufficient_funds"
+    assert sync["snapshot"]["cabinet_revision"] == revision
+    with postgres.connect() as c:
+        assert one(c, "SELECT count(*) AS count FROM entries")["count"] == 2
+        assert one(c, "SELECT count(*) AS count FROM entry_revisions")["count"] == 2
+
+
+def test_concurrent_expenses_cannot_overdraw_the_bank(postgres):
+    client, headers, cabinet, sprint, membership = setup_budget(postgres)
+    path = f"/v1/cabinets/{cabinet}/commands"
+    bodies = [purchase(sprint, membership, 600_000) for _ in range(2)]
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(
+            executor.map(lambda body: client.post(path, headers=headers, json=body), bodies)
+        )
+    assert sorted(response.status_code for response in responses) == [200, 409]
+    rejected = next(response for response in responses if response.status_code == 409)
+    assert rejected.json()["code"] == "insufficient_funds"
+    state = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    assert state["projection"]["bank_minor"] == 400_000
+    assert state["cabinet_revision"] == 3
+
+
+@pytest.mark.parametrize(
+    "operation", ["void_topup", "reduce_topup", "increase_expense", "topup_to_expense"]
+)
+def test_history_changes_cannot_overdraw_the_bank(postgres, operation):
+    client, headers, cabinet, sprint, membership = setup_budget(postgres)
+    path = f"/v1/cabinets/{cabinet}/commands"
+    topup = purchase(sprint, membership, 100_000)
+    topup["payload"]["kind"] = "topup"
+    expense = purchase(sprint, membership, 1_050_000)
+    assert client.post(path, headers=headers, json=topup).status_code == 200
+    assert client.post(path, headers=headers, json=expense).status_code == 200
+    state = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    entry = expense if operation == "increase_expense" else topup
+    payload = {
+        "entry_id": entry["payload"]["entry_id"],
+        "sprint_id": sprint,
+        "expected_entry_revision": 1,
+        "allow_completed": False,
+    }
+    kind = "void_entry" if operation == "void_topup" else "correct_entry"
+    if kind == "correct_entry":
+        payload.update(
+            kind="expense" if operation in {"increase_expense", "topup_to_expense"} else "topup",
+            amount_minor=1_100_001 if operation == "increase_expense" else 1,
+        )
+    response = client.post(
+        path, headers=headers, json={"command_id": str(uuid4()), "type": kind, "payload": payload}
+    )
+    assert response.status_code == 409 and response.json()["code"] == "insufficient_funds"
+    current = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    assert current["cabinet_revision"] == state["cabinet_revision"]
+    assert current["projection"] == state["projection"]
+    with postgres.connect() as c:
+        row = one(
+            c,
+            "SELECT revision,amount_minor,deleted_at FROM entries WHERE id=:id",
+            id=entry["payload"]["entry_id"],
+        )
+        assert row["revision"] == 1 and row["amount_minor"] == entry["payload"]["amount_minor"]
+        assert row["deleted_at"] is None
+
+
+def test_bank_settings_reject_negative_target(postgres):
+    client, headers, cabinet, sprint, _ = setup_budget(postgres)
+    command = {
+        "command_id": str(uuid4()),
+        "type": "update_sprint",
+        "payload": {
+            "sprint_id": sprint,
+            "expected_cabinet_revision": 2,
+            "expected_business_date": str(business_date()),
+            "bank_minor": -1,
+        },
+    }
+    response = client.post(f"/v1/cabinets/{cabinet}/commands", headers=headers, json=command)
+    assert response.status_code == 409 and response.json()["code"] == "insufficient_funds"
+    state = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    assert state["projection"]["bank_minor"] == 1_000_000 and state["cabinet_revision"] == 2
+
+
+def test_existing_historical_debt_can_be_reduced_but_not_increased(postgres):
+    client, headers, cabinet, sprint, membership = setup_budget(postgres)
+    path = f"/v1/cabinets/{cabinet}/commands"
+    legacy = purchase(sprint, membership, 1_000_000)
+    assert client.post(path, headers=headers, json=legacy).status_code == 200
+    # Simulate debt recorded by an older release; the new guard does not rewrite history.
+    with postgres.begin() as c:
+        execute(
+            c,
+            "UPDATE entries SET amount_minor=1_100_000 WHERE id=:id",
+            id=legacy["payload"]["entry_id"],
+        )
+    expense = client.post(path, headers=headers, json=purchase(sprint, membership, 1))
+    assert expense.status_code == 409 and expense.json()["code"] == "insufficient_funds"
+    topup = purchase(sprint, membership, 1)
+    topup["payload"]["kind"] = "topup"
+    assert client.post(path, headers=headers, json=topup).status_code == 200
+    state = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    assert state["projection"]["bank_minor"] == -99_999
+
+
 def test_leave_replay_denies_financial_reads_and_widgets(postgres):
     client, headers, cabinet, sprint, membership = setup_budget(postgres)
     device = str(uuid4())

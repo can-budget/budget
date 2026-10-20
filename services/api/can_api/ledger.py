@@ -370,6 +370,7 @@ def mutate(c: Connection, user_id: Any, cabinet: dict, membership: dict, command
         require(
             today <= sprint["end_date"] or p["allow_completed"], "completed_confirmation_required"
         )
+        bank_before = projection_data(c, sprint, today)["projection"]["bank_minor"]
         before = None
         if kind == "add_entry":
             occurred = datetime.fromisoformat(p["occurred_at"].replace("Z", "+00:00"))
@@ -493,6 +494,10 @@ def mutate(c: Connection, user_id: Any, cabinet: dict, membership: dict, command
                 revision=cabinet["revision"] + 1,
                 id=p["entry_id"],
             )
+        bank_after = projection_data(c, sprint, today)["projection"]["bank_minor"]
+        # The cabinet lock serializes spending; the command savepoint rolls back a rejection.
+        # Existing historical debt can be corrected without allowing it to grow.
+        require(bank_after >= min(bank_before, 0), "insufficient_funds")
         after = one(c, "SELECT * FROM entries WHERE id=:id", id=p["entry_id"])
         assert after is not None
         execute(
@@ -516,6 +521,8 @@ def mutate(c: Connection, user_id: Any, cabinet: dict, membership: dict, command
         require(today <= end <= sprint["start_date"] + timedelta(days=365), "invalid_end_date", 422)
         bank = projection_data(c, sprint, today)["projection"]["bank_minor"]
         target = p.get("bank_minor", bank)
+        if "bank_minor" in p:
+            require(target >= 0, "insufficient_funds")
         delta = target - bank
         if delta == 0 and end == sprint["end_date"]:
             return result

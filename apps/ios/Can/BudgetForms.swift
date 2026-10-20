@@ -18,7 +18,7 @@ struct SprintEditor: View {
         return min(BusinessTime.date(currentDay), max)...max
     }
     private var preview: Projection? {
-        guard let bank = Money.parse(amount, signed: editing, max: editing ? BudgetEngine.maxExposure : BudgetEngine.maxOperation) else { return nil }
+        guard let bank = Money.parse(amount, max: editing ? BudgetEngine.maxExposure : BudgetEngine.maxOperation) else { return nil }
         if editing {
             guard let basis, let confirmed = basis.projection else { return nil }
             let change = RevisionInput(effective_day: basis.business_date,
@@ -43,7 +43,7 @@ struct SprintEditor: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(editing ? "Остаток сейчас" : "Сумма").font(.subheadline).foregroundStyle(.secondary)
                         TextField("0", text: Binding(get: { amount }, set: { amount = $0; bankDirty = true }))
-                            .keyboardType(editing ? .numbersAndPunctuation : .decimalPad)
+                            .keyboardType(.decimalPad)
                             .font(.system(size: 64, weight: .regular)).monospacedDigit().minimumScaleFactor(0.4)
                             .accessibilityLabel(editing ? "Текущий остаток бюджета" : "Сумма бюджета")
                             .accessibilityIdentifier("budget-editor.amount")
@@ -135,7 +135,7 @@ struct SprintEditor: View {
         }
     }
     private func save() async throws {
-        guard let basis, let value = Money.parse(amount, signed: editing, max: editing ? BudgetEngine.maxExposure : BudgetEngine.maxOperation) else {
+        guard let basis, let value = Money.parse(amount, max: editing ? BudgetEngine.maxExposure : BudgetEngine.maxOperation) else {
             throw APIError.local("Проверьте сумму.")
         }
         if editing, let sprint = basis.sprint {

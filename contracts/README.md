@@ -64,3 +64,16 @@ queues exactly one immutable entry. Both versions remain accepted by WidgetKit.
 
 The original 240 version-2 fixtures remain unchanged. Shared `today_topup_cases.json`
 adds 12 version-3 examples used by both Python and Swift tests.
+
+## Bank spending limit
+
+The owner's 2026-10-20 correction allows spending more than today's allowance,
+but not more than the remaining total bank. Entry mutations run under the
+cabinet lock and reject with `insufficient_funds` (409) if their resulting bank
+would be negative. The same rule covers corrections and cancellations of topups;
+explicit bank targets must be nonnegative. A rejection rolls back the mutation,
+preserves the cabinet revision and is retained as an immutable rejected receipt.
+Old negative ledger balances remain readable and may be improved, but new entry
+mutations cannot deepen them. Neither historical calculation engine is clamped.
+The client validates against its projection including pending entries and marks
+an excessive draft as invalid without changing its amount or enqueuing it.

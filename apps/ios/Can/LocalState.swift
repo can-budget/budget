@@ -152,6 +152,10 @@ enum Reconciliation {
         if let server = BusinessTime.parse(response.snapshot.server_time) { next.serverOffset = server.timeIntervalSinceNow }
         return next
     }
+    static func draftExceedsBank(_ state: LocalState, projection: Projection?) -> Bool {
+        guard state.draftKind == "expense", let amount = Money.parse(state.draftAmount), let projection else { return false }
+        return amount > max(0, projection.bank_minor)
+    }
     static func projection(_ state: LocalState, membershipID: String, now: Date = Date(), includingDraft: Bool = false) throws -> Projection? {
         guard let snapshot = state.snapshot, let sprint = snapshot.sprint else { return nil }
         var additions: [DayInput] = state.pending.compactMap { item in
@@ -167,11 +171,13 @@ enum Reconciliation {
                             expenses_minor: item.command.payload["kind"]?.text == "expense" ? amount : 0)
         }
         let day = max(snapshot.business_date, BusinessTime.day(now.addingTimeInterval(state.serverOffset)))
+        let base = try snapshot.project(asOf: day, additional: additions)
         if includingDraft, day <= sprint.end_date, ["expense", "topup"].contains(state.draftKind),
-           let amount = Money.parse(state.draftAmount), amount > 0 {
+           let amount = Money.parse(state.draftAmount), amount > 0, !draftExceedsBank(state, projection: base) {
             additions.append(DayInput(day: day, topups_minor: state.draftKind == "topup" ? amount : 0,
                                       expenses_minor: state.draftKind == "expense" ? amount : 0))
+            return try snapshot.project(asOf: day, additional: additions)
         }
-        return try snapshot.project(asOf: day, additional: additions)
+        return base
     }
 }
