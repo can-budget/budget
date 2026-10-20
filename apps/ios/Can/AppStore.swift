@@ -400,9 +400,20 @@ final class AppStore: ObservableObject {
         do {
             let result: CommandResult = try await api.request("/v1/cabinets/\(cabinetID)/commands", method: "POST", body: JSONEncoder().encode(command))
             guard generation == sessionGeneration else { throw CancellationError() }
-            try mutate { $0.onlineIntents.removeValue(forKey: key) }
+            try mutate {
+                if command.type == "create_sprint" {
+                    if $0.snapshot?.sprint?.id != result.entity_id { $0.draftAmount = ""; $0.draftKind = "expense" }
+                } else { $0.onlineIntents.removeValue(forKey: key) }
+            }
             if let invitation = result.invitation { self.invitation = invitation }
             await syncNow(force: true)
+            if command.type == "create_sprint" {
+                guard let confirmed = result.result_revision,
+                      let revision = state?.snapshot?.cabinet_revision, revision >= confirmed else {
+                    throw APIError(code: "budget_sync_pending", message: "", retryable: true)
+                }
+                try mutate { $0.onlineIntents.removeValue(forKey: key) }
+            }
             return result
         } catch let error as APIError where !error.retryable && error.code != "unauthorized" {
             guard generation == sessionGeneration else { throw CancellationError() }

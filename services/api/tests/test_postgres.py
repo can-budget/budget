@@ -71,6 +71,201 @@ def purchase(sprint, membership, amount=100):
     }
 
 
+def restart_budget(sprint, revision=2, initial=1_100_000, days=30):
+    return {
+        "command_id": str(uuid4()),
+        "type": "create_sprint",
+        "payload": {
+            "sprint_id": str(uuid4()),
+            "initial_minor": initial,
+            "end_date": str(business_date() + timedelta(days=days - 1)),
+            "expected_cabinet_revision": revision,
+            "expected_business_date": str(business_date()),
+            "replaces_sprint_id": sprint,
+        },
+    }
+
+
+def test_new_budget_starts_fresh_and_preserves_old_budget_history(postgres, monkeypatch):
+    from can_api import ledger
+
+    client, headers, cabinet, sprint, membership = setup_budget(postgres)
+    path = f"/v1/cabinets/{cabinet}/commands"
+    # Give the previous budget a carry from yesterday, then today's real entries.
+    with postgres.begin() as c:
+        execute(
+            c,
+            "UPDATE sprints SET start_date=:yesterday WHERE id=:id",
+            yesterday=business_date() - timedelta(days=1),
+            id=sprint,
+        )
+    carry = {
+        "command_id": str(uuid4()),
+        "type": "choose_carry",
+        "payload": {
+            "sprint_id": sprint,
+            "day": str(business_date()),
+            "mode": "today",
+            "expected_cabinet_revision": 2,
+        },
+    }
+    assert client.post(path, headers=headers, json=carry).status_code == 200
+    expense = purchase(sprint, membership, 15400)
+    topup = purchase(sprint, membership, 2000)
+    topup["payload"]["kind"] = "topup"
+    for entry in (expense, topup):
+        assert client.post(path, headers=headers, json=entry).status_code == 200
+    old = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    assert old["projection"]["carry_status"] == "selected_today"
+    command = restart_budget(sprint, revision=old["cabinet_revision"])
+    first = client.post(path, headers=headers, json=command)
+    assert first.status_code == 200, first.text
+    assert client.post(path, headers=headers, json=command).json() == first.json()
+    state = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    new_id = command["payload"]["sprint_id"]
+    assert state["sprint"]["id"] == new_id
+    assert state["sprint"]["start_date"] == str(business_date())
+    assert state["sprint"]["closed_at"] is None
+    assert state["projection"]["bank_minor"] == 1_100_000
+    assert state["projection"]["today_remaining_minor"] == 36666
+    assert state["projection"]["days_remaining"] == 30
+    assert state["projection"]["carry_status"] == "none"
+    assert state["daily_totals"] == state["carry_decisions"] == state["sprint_revisions"] == []
+    assert state["cabinet_revision"] == old["cabinet_revision"] + 1
+    archive_path = f"/v1/cabinets/{cabinet}/sprints/{sprint}/projection"
+    archived = client.get(archive_path, headers=headers).json()
+    assert archived["sprint"]["status"] == archived["projection"]["status"] == "completed"
+    assert archived["sprint"]["closed_at"] is not None
+    assert archived["sprint"]["end_date"] == old["sprint"]["end_date"]
+    assert archived["projection"]["bank_minor"] == old["projection"]["bank_minor"]
+    assert archived["projection"]["today_remaining_minor"] is None
+    assert archived["projection"]["days_remaining"] == 0
+    assert archived["daily_totals"] == old["daily_totals"]
+    assert archived["carry_decisions"] == old["carry_decisions"]
+    items = client.get(f"/v1/cabinets/{cabinet}/sprints/{sprint}/entries", headers=headers).json()[
+        "items"
+    ]
+    assert {entry["id"] for entry in items} == {
+        expense["payload"]["entry_id"],
+        topup["payload"]["entry_id"],
+    }
+    with postgres.connect() as c:
+        assert one(c, "SELECT count(*) AS count FROM sprints")["count"] == 2
+        assert one(c, "SELECT count(*) AS count FROM sprints WHERE closed_at IS NULL")["count"] == 1
+    # Advancing the day must not resume the archived budget or recalculate its carry.
+    future = business_date() + timedelta(days=5)
+    monkeypatch.setattr(ledger, "business_date", lambda: future)
+    assert client.get(archive_path, headers=headers).json()["projection"] == archived["projection"]
+
+
+@pytest.mark.parametrize(
+    "failure", ["same_id", "wrong_previous", "past_end", "changed_day", "no_replacement"]
+)
+def test_failed_restart_keeps_existing_budget_active(postgres, failure):
+    client, headers, cabinet, sprint, _ = setup_budget(postgres)
+    command = restart_budget(sprint)
+    expected = {
+        "same_id": "sprint_id_conflict",
+        "wrong_previous": "stale_revision",
+        "past_end": "invalid_end_date",
+        "changed_day": "business_date_changed",
+        "no_replacement": "sprint_already_active",
+    }[failure]
+    if failure == "same_id":
+        command["payload"]["sprint_id"] = sprint
+    if failure == "wrong_previous":
+        command["payload"]["replaces_sprint_id"] = str(uuid4())
+    if failure == "past_end":
+        command["payload"]["end_date"] = str(business_date() - timedelta(days=1))
+    if failure == "changed_day":
+        command["payload"]["expected_business_date"] = str(business_date() - timedelta(days=1))
+    if failure == "no_replacement":
+        del command["payload"]["replaces_sprint_id"]
+    response = client.post(f"/v1/cabinets/{cabinet}/commands", headers=headers, json=command)
+    assert response.status_code in (409, 422) and response.json()["code"] == expected
+    state = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    assert state["sprint"]["id"] == sprint and state["sprint"]["closed_at"] is None
+    assert state["cabinet_revision"] == 2 and state["projection"]["bank_minor"] == 1_000_000
+    with postgres.connect() as c:
+        assert one(c, "SELECT count(*) AS count FROM sprints")["count"] == 1
+
+
+def test_concurrent_restarts_create_only_one_new_budget(postgres):
+    client, headers, cabinet, sprint, _ = setup_budget(postgres)
+    commands = [restart_budget(sprint) for _ in range(2)]
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(
+            executor.map(
+                lambda command: client.post(
+                    f"/v1/cabinets/{cabinet}/commands", headers=headers, json=command
+                ),
+                commands,
+            )
+        )
+    assert sorted(response.status_code for response in responses) == [200, 409]
+    assert (
+        next(response for response in responses if response.status_code == 409).json()["code"]
+        == "stale_revision"
+    )
+    with postgres.connect() as c:
+        assert one(c, "SELECT count(*) AS count FROM sprints")["count"] == 2
+        assert one(c, "SELECT count(*) AS count FROM sprints WHERE closed_at IS NULL")["count"] == 1
+
+
+def test_old_offline_entries_require_confirmation_and_never_enter_new_budget(postgres):
+    client, headers, cabinet, sprint, membership = setup_budget(postgres)
+    path = f"/v1/cabinets/{cabinet}/commands"
+    late = purchase(sprint, membership, 100)
+    command = restart_budget(sprint)
+    assert client.post(path, headers=headers, json=command).status_code == 200
+    refused = client.post(path, headers=headers, json=late)
+    assert (
+        refused.status_code == 409 and refused.json()["code"] == "completed_confirmation_required"
+    )
+    recovered = {
+        **late,
+        "command_id": str(uuid4()),
+        "payload": {
+            **late["payload"],
+            "allow_completed": True,
+            "recovery_of_command_id": late["command_id"],
+        },
+    }
+    assert client.post(path, headers=headers, json=recovered).status_code == 200
+    after_close = purchase(sprint, membership, 100)
+    after_close["payload"].update(
+        occurred_at=(now() + timedelta(seconds=1)).isoformat(), allow_completed=True
+    )
+    response = client.post(path, headers=headers, json=after_close)
+    assert response.status_code == 422 and response.json()["code"] == "entry_outside_sprint"
+    state = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()
+    assert state["sprint"]["id"] == command["payload"]["sprint_id"]
+    assert state["projection"]["bank_minor"] == 1_100_000
+    assert state["projection"]["today_remaining_minor"] == 36666
+    assert state["daily_totals"] == []
+    archived = client.get(
+        f"/v1/cabinets/{cabinet}/sprints/{sprint}/projection", headers=headers
+    ).json()
+    assert archived["projection"]["bank_minor"] == 999900
+    update = {
+        "command_id": str(uuid4()),
+        "type": "update_sprint",
+        "payload": {
+            "sprint_id": sprint,
+            "expected_cabinet_revision": state["cabinet_revision"],
+            "expected_business_date": str(business_date()),
+            "bank_minor": 100,
+        },
+    }
+    assert client.post(path, headers=headers, json=update).json()["code"] == "sprint_completed"
+    # With a clean 30-day budget, a one-ruble daily overspend changes future days by kopeks.
+    spent = purchase(command["payload"]["sprint_id"], membership, 36766)
+    assert client.post(path, headers=headers, json=spent).status_code == 200
+    p = client.get(f"/v1/cabinets/{cabinet}/snapshot", headers=headers).json()["projection"]
+    assert p["today_remaining_minor"] == -100
+    assert p["bank_minor"] // (p["days_remaining"] - 1) == 36663
+
+
 def test_lost_response_replay_snapshot_and_payload_collision(postgres):
     client, headers, cabinet, sprint, membership = setup_budget(postgres)
     body = purchase(sprint, membership, 120_000)

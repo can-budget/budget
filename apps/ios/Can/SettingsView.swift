@@ -29,7 +29,7 @@ struct SettingsView: View {
                     Button("Название") { renaming = true }.foregroundStyle(.primary)
                 }
                 Section("Бюджет") {
-                    Button("Сумма и срок") { editSprint = true }.foregroundStyle(.primary)
+                    Button("Новый бюджет") { editSprint = true }.foregroundStyle(.primary)
                     NavigationLink("Прошлые бюджеты", destination: ArchiveView())
                     NavigationLink(destination: QueueView()) {
                         HStack { Text("Синхронизация"); Spacer(); Text(store.offline ? "Нет связи" : store.totalPendingCount > 0 ? "\(store.totalPendingCount) в очереди" : "").font(.caption).foregroundStyle(.secondary) }
@@ -48,7 +48,7 @@ struct SettingsView: View {
                 } footer: { Text("Ваши операции останутся в общей истории.") }
             }
         }.listStyle(.plain).canScreen().navigationTitle("Кабинет")
-            .sheet(isPresented: $editSprint) { SprintEditor(editing: store.projection?.status == "active") }
+            .sheet(isPresented: $editSprint) { SprintEditor(restarting: store.projection?.status == "active") }
             .sheet(isPresented: $showInvitation) { if let invitation = store.invitation { InvitationView(invitation: invitation) } }
             .sheet(isPresented: $privacy) { PrivacyView() }
             .sheet(isPresented: $renaming) {

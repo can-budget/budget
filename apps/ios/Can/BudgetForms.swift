@@ -3,33 +3,25 @@ import SwiftUI
 struct SprintEditor: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    let editing: Bool
+    let restarting: Bool
     @State private var basis: Snapshot?
     @State private var amount = ""
     @State private var end = Date()
     @State private var busy = false
     @State private var failure: String?
-    @State private var bankDirty = false
+    @State private var amountDirty = false
     @State private var endDirty = false
     private var currentDay: String { basis?.business_date ?? BusinessTime.day(Date()) }
     private var dateRange: ClosedRange<Date> {
-        let start = BusinessTime.date(editing ? basis?.sprint?.start_date ?? currentDay : currentDay)
+        let start = BusinessTime.date(currentDay)
         let max = BusinessTime.calendar.date(byAdding: .day, value: 365, to: start)!
         return min(BusinessTime.date(currentDay), max)...max
     }
     private var preview: Projection? {
-        guard let bank = Money.parse(amount, max: editing ? BudgetEngine.maxExposure : BudgetEngine.maxOperation) else { return nil }
-        if editing {
-            guard let basis, let confirmed = basis.projection else { return nil }
-            let change = RevisionInput(effective_day: basis.business_date,
-                                       sequence: (basis.sprint_revisions.map(\.sequence).max() ?? 0) + 1,
-                                       bank_adjustment_minor: bankDirty ? bank - confirmed.bank_minor : 0,
-                                       end_date: endDirty ? BusinessTime.day(end) : basis.sprint?.end_date)
-            return try? basis.project(revision: change)
-        }
-        return try? BudgetEngine.project(BudgetInput(initial_minor: bank, start_date: currentDay,
-                                                     end_date: BusinessTime.day(end), as_of_date: currentDay,
-                                                     days: [], choices: [:], revisions: []))
+        guard let bank = Money.parse(amount) else { return nil }
+        return try? BudgetCalculation.project(BudgetInput(initial_minor: bank, start_date: currentDay,
+            end_date: BusinessTime.day(end), as_of_date: currentDay, days: [], choices: [:], revisions: []),
+            topupsTodayFrom: currentDay)
     }
     @State private var choosingDate = false
     @State private var conflict = false
@@ -41,15 +33,16 @@ struct SprintEditor: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Rectangle().fill(CanStyle.separator).frame(height: 0.5)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(editing ? "Остаток сейчас" : "Сумма").font(.subheadline).foregroundStyle(.secondary)
-                        TextField("0", text: Binding(get: { amount }, set: { amount = $0; bankDirty = true }))
+                        Text("Сумма нового бюджета").font(.subheadline).foregroundStyle(.secondary)
+                        TextField("0", text: Binding(get: { amount }, set: { amount = $0; amountDirty = true }))
                             .keyboardType(.decimalPad)
                             .font(.system(size: 64, weight: .regular)).monospacedDigit().minimumScaleFactor(0.4)
-                            .accessibilityLabel(editing ? "Текущий остаток бюджета" : "Сумма бюджета")
+                            .accessibilityLabel("Сумма нового бюджета")
                             .accessibilityIdentifier("budget-editor.amount")
                         if let p = preview {
-                            Text("\(p.today_remaining_minor.map(Money.format) ?? "—") \(editing ? "на сегодня" : "в первый день")")
+                            Text("\(p.today_remaining_minor.map(Money.format) ?? "—") на сегодня")
                                 .font(.body).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("budget-editor.preview")
                         }
                     }
                     VStack(spacing: 0) {
@@ -65,17 +58,17 @@ struct SprintEditor: View {
                         Rectangle().fill(CanStyle.separator).frame(height: 0.5)
                     }
                     let count = (BusinessTime.calendar.dateComponents([.day], from: BusinessTime.date(currentDay), to: end).day ?? 0) + 1
-                    Text("\(BudgetDisplay.days(count)), включая сегодня.\(editing ? "\nИстория покупок сохранится." : "")")
+                    Text("\(BudgetDisplay.days(count)), включая сегодня.\(restarting ? "\nТекущий бюджет завершится и останется в истории. Новый расчёт начнётся с сегодняшнего дня." : "")")
                         .font(.footnote).foregroundStyle(.secondary).lineSpacing(5)
                     if let failure { Text(failure).font(.footnote).foregroundStyle(CanStyle.danger).accessibilityIdentifier("budget-editor.failure") }
                     if busy || checking { ProgressView(checking ? "Проверяем расчёт" : "Сохраняем") }
                     if !checking && !ready { Button("Обновить расчёт") { Task { await refreshBasis() } } }
                 }.padding(24)
-            }.canScreen().navigationTitle("")
+            }.canScreen().navigationTitle("Новый бюджет").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Отменить") { dismiss() }.foregroundStyle(.secondary) }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Сохранить") { submit() }.fontWeight(.semibold)
+                        Button("Начать") { submit() }.fontWeight(.semibold)
                             .disabled(busy || !ready || basis == nil || preview == nil).accessibilityIdentifier("budget-editor.save")
                     }
                 }
@@ -97,7 +90,7 @@ struct SprintEditor: View {
     private func preparePreview() {
         guard basis == nil else { return }
         basis = store.snapshot
-        if editing, let p = basis?.projection, let sprint = basis?.sprint {
+        if restarting, let p = basis?.projection, let sprint = basis?.sprint {
             amount = Money.editable(p.bank_minor); end = BusinessTime.date(sprint.end_date)
         } else { end = BusinessTime.date(currentDay) }
     }
@@ -110,8 +103,8 @@ struct SprintEditor: View {
             try await store.requireSettled()
             guard !Task.isCancelled, cabinet == store.snapshot?.cabinet.id else { return }
             basis = store.snapshot
-            if editing, let p = basis?.projection, let sprint = basis?.sprint {
-                if !bankDirty { amount = Money.editable(p.bank_minor) }
+            if restarting, let p = basis?.projection, let sprint = basis?.sprint {
+                if !amountDirty { amount = Money.editable(p.bank_minor) }
                 if !endDirty { end = BusinessTime.date(sprint.end_date) }
             }
             ready = true
@@ -128,32 +121,25 @@ struct SprintEditor: View {
                 if let error = error as? APIError, ["stale_revision", "business_date_changed"].contains(error.code) { conflict = true }
                 failure = error.localizedDescription + " Введённые поля сохранены. Проверьте обновлённый расчёт и подтвердите ещё раз."
                 basis = store.snapshot
-                if editing, !bankDirty, let bank = basis?.projection?.bank_minor { amount = Money.editable(bank) }
-                if editing, !endDirty, let date = basis?.sprint?.end_date { end = BusinessTime.date(date) }
+                if restarting, !amountDirty, let bank = basis?.projection?.bank_minor { amount = Money.editable(bank) }
+                if restarting, !endDirty, let date = basis?.sprint?.end_date { end = BusinessTime.date(date) }
             }
             busy = false
         }
     }
     private func save() async throws {
-        guard let basis, let value = Money.parse(amount, max: editing ? BudgetEngine.maxExposure : BudgetEngine.maxOperation) else {
+        guard let basis, let value = Money.parse(amount), value > 0 else {
             throw APIError.local("Проверьте сумму.")
         }
-        if editing, let sprint = basis.sprint {
-            var payload: [String: JSONValue] = ["sprint_id": .string(sprint.id),
-                "expected_cabinet_revision": .integer(basis.cabinet_revision), "expected_business_date": .string(basis.business_date)]
-            if bankDirty, value != basis.projection?.bank_minor { payload["bank_minor"] = .integer(value) }
-            if endDirty, BusinessTime.day(end) != sprint.end_date { payload["end_date"] = .string(BusinessTime.day(end)) }
-            guard payload.count > 3 else { return }
-            _ = try await store.onlineCommand("update_sprint", payload: payload)
-        } else {
-            guard value > 0 else { throw APIError.local("Сумма должна быть положительной.") }
-            // Reuse the pending command's sprint identifier after a lost HTTP response.
-            let existing = store.state?.onlineIntents.values.first { $0.command.type == "create_sprint" && $0.cabinetID == basis.cabinet.id }
-            let id = existing?.command.payload["sprint_id"]?.text ?? UUID().uuidString.lowercased()
-            _ = try await store.onlineCommand("create_sprint", payload: ["sprint_id": .string(id),
-                "initial_minor": .integer(value), "end_date": .string(BusinessTime.day(end)),
-                "expected_cabinet_revision": .integer(basis.cabinet_revision)])
-        }
+        // Reuse the pending command's sprint identifier after a lost HTTP response.
+        let existing = store.state?.onlineIntents.values.first { $0.command.type == "create_sprint" && $0.cabinetID == basis.cabinet.id }
+        let id = existing?.command.payload["sprint_id"]?.text ?? UUID().uuidString.lowercased()
+        var payload: [String: JSONValue] = ["sprint_id": .string(id),
+            "initial_minor": .integer(value), "end_date": .string(BusinessTime.day(end)),
+            "expected_business_date": .string(basis.business_date),
+            "expected_cabinet_revision": .integer(basis.cabinet_revision)]
+        if restarting, let sprint = basis.sprint { payload["replaces_sprint_id"] = .string(sprint.id) }
+        _ = try await store.onlineCommand("create_sprint", payload: payload)
     }
 }
 
@@ -325,7 +311,7 @@ struct ArchiveView: View {
             ForEach(sprints.filter { $0.status == "completed" }) { sprint in
                 NavigationLink(destination: HistoryView(archivedSprint: sprint)) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("\(BudgetDisplay.date(sprint.start_date)) — \(BudgetDisplay.date(sprint.end_date))")
+                        Text("\(BudgetDisplay.date(sprint.start_date)) — \(BudgetDisplay.date(sprint.historyEndDate))")
                         if let bank = finalBalances[sprint.id] { Text("Осталось \(Money.format(bank))").font(.subheadline).foregroundStyle(.secondary) }
                         else { Text("На старте \(Money.format(sprint.initial_minor))").font(.subheadline).foregroundStyle(.secondary) }
                     }.padding(.vertical, 6)

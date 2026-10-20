@@ -113,6 +113,48 @@ final class BudgetAndSyncTests: XCTestCase {
         XCTAssertNil(audit.items.first?.before_state)
         XCTAssertEqual(audit.items.first?.after_state?["amount_minor"], .integer(123))
     }
+    func testNewBudgetClearsOldDraftAndDoesNotOverlayOldQueuedEntries() throws {
+        var state = LocalState(userID: "owner", snapshot: try snapshot())
+        state.draftAmount = "391"; state.draftKind = "topup"
+        let previous = pending("old-expense", state: "unknown")
+        state.pending = [previous]
+        let input = BudgetInput(initial_minor: 1100000, start_date: "2026-10-11", end_date: "2026-11-09",
+            as_of_date: "2026-10-11", days: [], choices: [:], revisions: [])
+        let base = try snapshot(revision: 2)
+        let fresh = Snapshot(server_time: base.server_time, business_date: base.business_date, cabinet_revision: 2,
+            cabinet: base.cabinet,
+            sprint: Sprint(id: "new-sprint", initial_minor: input.initial_minor, start_date: input.start_date,
+                end_date: input.end_date, initial_end_date: input.end_date, calculation_version: 3, status: "active",
+                topups_today_from: input.start_date),
+            daily_totals: [], carry_decisions: [],
+            projection: try BudgetCalculation.project(input, topupsTodayFrom: input.start_date), sprint_revisions: [])
+        let unknown = Receipt(command_id: previous.id, status: "unknown", result_revision: nil, result: nil, error: nil)
+        let next = try Reconciliation.apply(SyncResponse(snapshot: fresh, receipts: [unknown]), requestedIDs: [previous.id], to: state)
+        XCTAssertEqual(next.draftAmount, "")
+        XCTAssertEqual(next.draftKind, "expense")
+        XCTAssertEqual(next.pending.first?.command, previous.command)
+        let projection = try XCTUnwrap(Reconciliation.projection(next, membershipID: "member", now: now, includingDraft: true))
+        XCTAssertEqual(projection.bank_minor, 1100000)
+        XCTAssertEqual(projection.today_remaining_minor, 36666)
+        XCTAssertEqual(projection.carry_status, "none")
+    }
+    func testSyncWithinCurrentBudgetKeepsTheDraft() throws {
+        var state = LocalState(userID: "owner", snapshot: try snapshot())
+        state.draftAmount = "391"; state.draftKind = "topup"
+        let next = try Reconciliation.apply(SyncResponse(snapshot: try snapshot(revision: 2), receipts: []), requestedIDs: [], to: state)
+        XCTAssertEqual(next.draftAmount, "391")
+        XCTAssertEqual(next.draftKind, "topup")
+    }
+    func testArchiveShowsActualCompletionDayWithoutExtendingExpiredBudgets() throws {
+        let sprint = Sprint(id: "archived", initial_minor: 1100000, start_date: "2026-10-20",
+            end_date: "2026-11-18", initial_end_date: "2026-11-18", calculation_version: 3,
+            status: "completed", topups_today_from: "2026-10-20", closed_at: "2026-10-20T16:30:00Z")
+        XCTAssertEqual(sprint.historyEndDate, "2026-10-21")
+        let expired = Sprint(id: "expired", initial_minor: 100, start_date: "2026-10-19",
+            end_date: "2026-10-20", initial_end_date: "2026-10-20", calculation_version: 2,
+            status: "completed", closed_at: "2026-10-21T04:00:00Z")
+        XCTAssertEqual(expired.historyEndDate, "2026-10-20")
+    }
     func testExplicitRestorePreservesQueueAndRequiresReviewOfLostAcknowledgement() throws {
         var state = LocalState(userID: "owner", snapshot: try snapshot(revision: 10))
         var acknowledged = pending("accepted", state: "acknowledged"); acknowledged.resultRevision = 10

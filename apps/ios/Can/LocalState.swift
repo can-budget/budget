@@ -125,6 +125,9 @@ enum Reconciliation {
         guard accepts(response.snapshot, over: current.snapshot) else { return current }
         var next = current
         next.snapshot = response.snapshot
+        if let previous = current.snapshot?.sprint?.id, previous != response.snapshot.sprint?.id {
+            next.draftAmount = ""; next.draftKind = "expense"
+        }
         for receipt in response.receipts {
             guard let index = next.pending.firstIndex(where: { $0.id == receipt.command_id }) else { continue }
             switch receipt.status {

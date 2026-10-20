@@ -89,8 +89,11 @@ def sprint_json(sprint: dict, day: date | None = None) -> dict:
             "calculation_version",
         )
     } | {
-        "status": "completed" if (day or business_date()) > sprint["end_date"] else "active",
+        "status": "completed"
+        if sprint.get("closed_at") is not None or (day or business_date()) > sprint["end_date"]
+        else "active",
         "topups_today_from": sprint.get("topups_today_from"),
+        "closed_at": sprint.get("closed_at"),
     }
 
 
@@ -108,6 +111,8 @@ def get_sprint(c: Connection, cabinet_id: Any, sprint_id: Any) -> dict:
 
 def projection_data(c: Connection, sprint: dict, day: date | None = None) -> dict:
     day = day or business_date()
+    closed_at = sprint.get("closed_at")
+    closed_day = closed_at.astimezone(ZONE).date() if closed_at else None
     totals = rows(
         c,
         """SELECT effective_day AS day,
@@ -134,7 +139,7 @@ def projection_data(c: Connection, sprint: dict, day: date | None = None) -> dic
         "initial_minor": sprint["initial_minor"],
         "start_date": str(sprint["start_date"]),
         "end_date": str(sprint["initial_end_date"]),
-        "as_of_date": str(day),
+        "as_of_date": str(min(day, closed_day) if closed_day else day),
         "days": [{**row, "day": str(row["day"])} for row in totals],
         "revisions": [
             {
@@ -156,6 +161,16 @@ def projection_data(c: Connection, sprint: dict, day: date | None = None) -> dic
         projection = project(data)
     except ValueError as exc:
         raise Problem("invalid_ledger", 422) from exc
+    if closed_day is not None and day >= closed_day:
+        projection.update(
+            status="completed",
+            today_remaining_minor=None,
+            days_remaining=0,
+            carry_minor=0,
+            carry_status="none",
+            today_mode_remaining_minor=None,
+            distribute_remaining_minor=None,
+        )
     return {
         "daily_totals": totals,
         "sprint_revisions": revisions,
@@ -343,10 +358,18 @@ def mutate(c: Connection, user_id: Any, cabinet: dict, membership: dict, command
     if kind == "create_sprint":
         end = date.fromisoformat(p["end_date"])
         require(today <= end <= today + timedelta(days=365), "invalid_end_date", 422)
+        if p.get("expected_business_date"):
+            require(p["expected_business_date"] == str(today), "business_date_changed")
         existing = one(
             c, "SELECT * FROM sprints WHERE cabinet_id=:id AND closed_at IS NULL", id=cabinet_id
         )
-        require(not existing or existing["end_date"] < today, "sprint_already_active")
+        replacement = p.get("replaces_sprint_id")
+        if replacement:
+            require(existing and str(existing["id"]) == replacement, "stale_revision")
+        require(
+            not existing or existing["end_date"] < today or replacement,
+            "sprint_already_active",
+        )
         if existing:
             execute(c, "UPDATE sprints SET closed_at=now() WHERE id=:id", id=existing["id"])
         require(
@@ -368,7 +391,9 @@ def mutate(c: Connection, user_id: Any, cabinet: dict, membership: dict, command
     elif kind in ("add_entry", "correct_entry", "void_entry"):
         assert sprint is not None
         require(
-            today <= sprint["end_date"] or p["allow_completed"], "completed_confirmation_required"
+            (sprint.get("closed_at") is None and today <= sprint["end_date"])
+            or p["allow_completed"],
+            "completed_confirmation_required",
         )
         bank_before = projection_data(c, sprint, today)["projection"]["bank_minor"]
         before = None
@@ -430,6 +455,11 @@ def mutate(c: Connection, user_id: Any, cabinet: dict, membership: dict, command
                 end = history[-1]["end_date_after"]
             require(
                 sprint["start_date"] <= day <= end and day <= today, "entry_outside_sprint", 422
+            )
+            require(
+                sprint.get("closed_at") is None or occurred <= sprint["closed_at"],
+                "entry_outside_sprint",
+                422,
             )
             duplicate = one(c, "SELECT id FROM entries WHERE id=:id", id=p["entry_id"])
             require(not duplicate, "entry_id_conflict")
@@ -516,7 +546,7 @@ def mutate(c: Connection, user_id: Any, cabinet: dict, membership: dict, command
     elif kind == "update_sprint":
         assert sprint is not None
         require(p["expected_business_date"] == str(today), "business_date_changed")
-        require(today <= sprint["end_date"], "sprint_completed")
+        require(sprint.get("closed_at") is None and today <= sprint["end_date"], "sprint_completed")
         end = date.fromisoformat(p["end_date"]) if "end_date" in p else sprint["end_date"]
         require(today <= end <= sprint["start_date"] + timedelta(days=365), "invalid_end_date", 422)
         bank = projection_data(c, sprint, today)["projection"]["bank_minor"]
@@ -557,6 +587,7 @@ def mutate(c: Connection, user_id: Any, cabinet: dict, membership: dict, command
         result["entity_id"] = str(revision_id)
     elif kind == "choose_carry":
         assert sprint is not None
+        require(sprint.get("closed_at") is None, "carry_unavailable")
         require(p["day"] == str(today), "business_date_changed")
         projection = projection_data(c, sprint, today)["projection"]
         require(projection["carry_status"] == "pending", "carry_unavailable")

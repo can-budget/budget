@@ -216,7 +216,7 @@ struct JoinCabinetView: View {
 }
 
 enum BudgetEditorPresentation: String, Identifiable {
-    case create, edit
+    case create, restart
     var id: String { rawValue }
 }
 
@@ -247,7 +247,7 @@ struct BudgetHomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showSettings) { SettingsView() }
             .navigationDestination(isPresented: $showHistory) { HistoryView() }
-            .sheet(item: $sprintEditor) { mode in SprintEditor(editing: mode == .edit) }
+            .sheet(item: $sprintEditor) { mode in SprintEditor(restarting: mode == .restart) }
             .sheet(isPresented: $carry) { CarryView() }
             .onChange(of: store.focusExpense) { _, focus in
                 if focus { showHistory = false; showSettings = false; carry = false; sprintEditor = nil; store.focusExpense = false }
@@ -259,7 +259,7 @@ struct BudgetHomeView: View {
                 .accessibilityIdentifier("budget.history")
             Spacer(minLength: 12)
             Button {
-                if projection?.status == "active" { sprintEditor = .edit }
+                if projection?.status == "active" { sprintEditor = .restart }
                 else { showSettings = true }
             } label: {
                 HStack(spacing: 8) {
@@ -269,7 +269,7 @@ struct BudgetHomeView: View {
                     }
                     Image(systemName: "gearshape").font(.system(size: 18, weight: .regular))
                 }.foregroundStyle(CanStyle.secondary).frame(minHeight: 44)
-            }.accessibilityLabel(projection?.status == "active" ? "Изменить остаток и срок" : "Кабинет")
+            }.accessibilityLabel(projection?.status == "active" ? "Задать новый бюджет" : "Кабинет")
                 .accessibilityIdentifier("budget.edit")
         }.frame(minHeight: 52)
     }

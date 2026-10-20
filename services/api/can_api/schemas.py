@@ -88,6 +88,14 @@ class CreateSprint(StrictModel):
     initial_minor: Money
     end_date: Day
     expected_cabinet_revision: Revision
+    replaces_sprint_id: UUID | None = None
+    expected_business_date: Day | None = None
+
+    @model_validator(mode="after")
+    def replacement_has_date(self) -> "CreateSprint":
+        if self.replaces_sprint_id is not None and self.expected_business_date is None:
+            raise ValueError("replacing a sprint requires the previewed business date")
+        return self
 
 
 class AddEntry(StrictModel):
