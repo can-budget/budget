@@ -9,6 +9,15 @@ from can_api.ledger import cursor_decode, cursor_encode
 from can_api.schemas import AddEntry, Command, CreateCabinet, SyncRequest
 
 
+def test_runtime_does_not_serve_interactive_api_documentation():
+    from fastapi.testclient import TestClient
+
+    with TestClient(app) as client:
+        for path in ("/docs", "/redoc", "/openapi.json"):
+            assert client.get(path).status_code == 404
+    assert "/v1/auth/password" in app.openapi()["paths"]
+
+
 def valid_entry():
     return {
         "entry_id": str(uuid4()),
