@@ -1,8 +1,8 @@
 # Implementation contract 1.4.0
 
-`openapi.yaml` is the active API contract. The complete supplied v1.1 package in
-`Can_Developer_Handoff_v1.1/` remains unchanged, including its calculation engine
-and fixtures. The original transport clarifications are listed below. The owner
+`openapi.yaml` is the active API contract. Version-2 calculation engines and
+their unchanged fixtures live in `reference/calculations/`; the historical
+transport schema lives in `reference/contracts/`. Transport clarifications are listed below. The owner
 approved an additional same-day topup policy on 2026-10-20.
 
 - Cabinet timezone is fixed to `Asia/Shanghai`, as required by the product rules.

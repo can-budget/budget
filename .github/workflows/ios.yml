@@ -4,14 +4,14 @@ on:
   pull_request:
     paths:
       - 'apps/ios/**'
-      - 'Can_Developer_Handoff_v1.1/reference/**'
+      - 'reference/**'
       - 'infra/scripts/ios-test.sh'
       - 'Makefile'
       - '.github/workflows/ios.yml'
   push:
     paths:
       - 'apps/ios/**'
-      - 'Can_Developer_Handoff_v1.1/reference/**'
+      - 'reference/**'
       - 'infra/scripts/ios-test.sh'
       - 'Makefile'
       - '.github/workflows/ios.yml'
@@ -39,7 +39,7 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Swift calculation parity
-        run: make -C Can_Developer_Handoff_v1.1 swift-check
+        run: make -C reference swift-check
       - name: Build app and widget without owner credentials
         run: make ios-build
       - name: Run app domain and reconciliation tests

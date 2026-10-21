@@ -1,0 +1,6 @@
+# Security-sensitive delivery and authentication changes
+/.github/ @Gerc0g
+/infra/ @Gerc0g
+/services/api/can_api/auth.py @Gerc0g
+/services/api/can_api/security.py @Gerc0g
+/services/api/can_api/passwords.py @Gerc0g

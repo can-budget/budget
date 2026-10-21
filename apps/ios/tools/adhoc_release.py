@@ -44,9 +44,19 @@ def run(args: list[str], log: Path | None = None) -> bytes:
     return result.stdout
 
 
+def owner_settings() -> dict[str, str]:
+    directory = ROOT / "apps/ios/Config"
+    values = {}
+    for name in ("Owner.xcconfig", "Local.xcconfig"):
+        path = directory / name
+        if path.is_file():
+            values.update(re.findall(r"^(\w+)\s*=\s*(\S+)\s*$", path.read_text(), re.MULTILINE))
+    return values
+
+
 def settings() -> dict[str, str]:
-    path = ROOT / "apps/ios/Config/Owner.xcconfig"
-    values = dict(re.findall(r"^(\w+)\s*=\s*(\S+)\s*$", path.read_text(), re.MULTILINE))
+    path = ROOT / "apps/ios/Config/Local.xcconfig"
+    values = owner_settings()
     keys = [
         "CAN_DEVELOPMENT_TEAM",
         "CAN_BUNDLE_ID",

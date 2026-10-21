@@ -1,62 +1,43 @@
-# Can / «Можно» для iPhone
+# Can for iPhone
 
-Нативный SwiftUI проект с iOS 17+, общий production backend и WidgetKit extension. Текущий выбранный вход — личный логин и пароль. Бесплатная доставка на iPhone 16e и 16 Pro Max — через SideStore; платное Apple Developer Program не требуется. Для сборки нужен Mac с полным Xcode 26+; CocoaPods и XcodeGen не используются.
+SwiftUI app and WidgetKit extension, targeting iOS 17+. Building requires macOS and Xcode 26+. The app currently uses a Russian interface; [project documentation in Russian](../../README.ru.md).
 
-## Собрать для SideStore
+## Configure your API
 
-Из корня репозитория:
+Create `Config/Local.xcconfig` (ignored by Git). Keep both values consistent:
+
+```xcconfig
+CAN_API_BASE_URL = https:/$()/api.example.com
+CAN_API_HOST = api.example.com
+```
+
+For an IP endpoint, use the same publicly routable IP in both settings and a publicly trusted certificate with a matching IP SAN. `$()` preserves the double slash in Xcode configuration syntax. The checked-in `Owner.xcconfig` supplies placeholders; its optional local include is used by Xcode and the Python build helpers. Do not store passwords or signing keys in either file.
+
+## Build
+
+From the repository root:
 
 ```sh
+make ios-project-check
+make ios-build
+make ios-test
 make ios-sideload
 ```
 
-Файл появится в `build/ios-sideload/<UTC timestamp>/Can-SideStore.ipa`. Он требует подписи SideStore на каждом iPhone. При импорте **сохранить CanWidget**. Разовая настройка, LocalDevVPN и последующие обновления описаны в [инструкции установки](../../docs/IOS_DELIVERY.md). На первом iPhone 16e подтверждены установка и вход; автоматическое продление и второй телефон ещё требуют проверки.
+The last command creates `build/ios-sideload/<timestamp>/Can-SideStore.ipa`, containing the app and its widget. It does not sign with an Apple Account or install anything. Import into SideStore on each phone and keep the widget extension. Keep the same signing account and identifiers when updating, and preserve local data.
 
-Тихая команда продления подписи для обоих приложений: `make ios-refresh-send IOS_DEVICE="имя или идентификатор"`. Генератор определит фактический SideStore на выбранном iPhone, подпишет `.shortcut` стандартной утилитой macOS и передаст файл в Documents SideStore. Импорт, расписание и проверка описаны в [автопродлении](../../docs/IOS_AUTO_REFRESH.md).
+Detailed setup: [iPhone installation](../../docs/IOS_DELIVERY.md) and [signature renewal](../../docs/IOS_AUTO_REFRESH.md). Paid Ad Hoc helpers remain available through `make ios-doctor`, `make ios-release` and `make ios-install`; they require paid Apple membership and configured team/identifiers in `Local.xcconfig`.
 
-## Вход и сессия
+## Simulator
 
-Публичной регистрации нет. На backend учётные записи создаются владельцем:
+`make ios-test IOS_DESTINATION="platform=iOS Simulator,id=UUID"` selects a Simulator explicitly. Tests cover calculations, draft projections, offline reconciliation, account deletion and rewritten signing groups.
 
-```sh
-python -m can_api.local_accounts create --login phone1 --display-name "Первый участник"
-python -m can_api.local_accounts create --login phone2 --display-name "Второй участник"
-```
+For an interactive owner-operated test, `make ios-simulator` builds a dedicated Simulator app and uses the operator's SSH access to issue a separate eight-hour synthetic session. Configure `--ssh-host` through `SIMULATOR_ARGS` for your server. This writes a test identity to the selected API, so it is deliberately excluded from `make verify`. It is not a public bypass-login route.
 
-CLI запрашивает пароль скрыто; минимальная длина — 15 символов, максимальная — 128. Для защищённого автоматического ввода использовать `--password-stdin`; пароль не передавать аргументом команды. `--user-id UUID` привязывает credentials к известному существующему аккаунту, сохраняя его данные. `reset --login phone1` меняет пароль и отзывает прежние session/widget tokens и reauthentication proofs. Не запускать CLI против случайной БД; в production он выполняется внутри существующего API container через доступ владельца.
+## Accounts and widgets
 
-После входа приложение хранит обновляемую сессию в приватном Keychain; сам пароль не сохраняется кодом приложения. Apple Password AutoFill может предложить сохранить пароль по выбору пользователя. Отдельный короткоживущий read-only token виджета хранится в общей группе. Переподпись SideStore и backend-сессия — разные процессы.
+There is no public registration. The operator creates accounts with `python -m can_api.local_accounts create --login member1` inside the API runtime; the CLI prompts for a 15–128-character password. `reset` revokes previous sessions. The app keeps rotating session credentials in its private Keychain and gives widgets only a limited read credential.
 
-## Проверка на Mac
+Widgets support the Home Screen and Lock Screen. They share a protected local snapshot and may fetch a small remote projection. iOS controls update timing. The free SideStore build does not enable Apple sign-in or APNs; these remain optional separately configured integrations.
 
-```sh
-make ios-build
-make ios-test
-make ios-project-check
-```
-
-`make ios-test IOS_DESTINATION="platform=iOS Simulator,id=UUID"` выбирает симулятор явно. Локальные XCTest проверяют расчёты, очередь, reconciliation, replay удаления, backward compatibility защищённых записей и определение переписанных SideStore групп. Метаданные проекта сами по себе не доказывают реальную компиляцию или подпись.
-
-Для интерактивного симулятора до создания личных credentials остаётся `make ios-simulator` / `Run Simulator.command`: команда через owner SSH выдаёт отдельному синтетическому аккаунту восьмичасовую сессию. Она не создаёт публичный fake-login endpoint и не даёт пароль от личного аккаунта. Повторный запуск инструмента отзывает старую сессию этого тестового аккаунта; после подключения к нему личного логина не использовать этот инструмент для обычного продления входа.
-
-## Конфигурация подписи и виджета
-
-`Config/Owner.xcconfig` содержит публичные настройки production API и прежнего платного Ad Hoc пути; секретов в нём нет. SideStore build использует стабильные собственные bundle IDs, единственный App Group и `CAN_SIDELOAD`; APNs и Apple sign-in для него не запрашиваются. Production HTTPS origin берётся из `CAN_API_BASE_URL`. HTTP, неправильный origin или Simulator вместо iPhone не принимаются за результат выпуска.
-
-SideStore может переписать bundle IDs и App Group. В этом режиме приложение и extension определяют фактически разрешённые группы из собственных установленных профилей. Полная сессия приложения остаётся приватной; виджет имеет только свой токен краткого остатка. При обычном обновлении сохранять прежний Apple Account и extension. Приложение без подходящего профиля сообщает об ошибке настройки вместо работы с неподходящими группами.
-
-Оба виджета — Home Screen и Lock Screen — включены. Без push они показывают последнее полученное значение и запрашивают обновления по правилам WidgetKit. Открытие приложения обновляет общий снимок. Пользователь может убрать виджет в настройках iOS; принудительное закрепление невозможно.
-
-## Локальные данные и удаление аккаунта
-
-Очередь и снимки принадлежат конкретному server user ID. После смены входа прежняя очередь сохраняется отдельно и не отправляется от другого пользователя. Парольный identity key основан на неизменном user ID, а не на переиспользуемом логине.
-
-Удаление требует повторного ввода пароля того же пользователя. До DELETE в приватном Keychain сохраняются immutable command ID/body и proof. Неизвестный исход проверяется replay исходного запроса; обычный 401 не подтверждает удаление. Ответ 202 подтверждает принятие задания, не завершение фоновой обработки. После подтверждения очищаются только данные удаляемого аккаунта. Исторические защищённые deletion records читаются через прежние Codable keys.
-
-Текущие общие операции/суммы/даты сохраняются после удаления пользователя с обезличиванием авторства. На других устройствах отзыв сессии скрывает доступ, но не разрешает стирать локальную очередь без подтверждения исходного DELETE. Не удалять приложение перед обновлением, если на телефоне есть неотправленные записи.
-
-## Изменения бюджета
-
-Живой preview калькулятора не отправляет операцию до Enter. Расход может превысить дневной лимит, пока общий банк остаётся неотрицательным; весь плюс добавляется на сегодня. Сохранение новой суммы и даты начинает новый бюджет с текущего дня, сохраняя прежний в истории. Прежние carry/topups/расходы не переносятся автоматически. Расчёты используют integer minor units и бизнес-день `Asia/Shanghai`.
-
-Для приёмки на двух устройствах использовать [acceptance record](../../docs/ACCEPTANCE_RECORD.md), учитывая текущий вход по паролю и SideStore вместо старого Apple/TestFlight handoff.
+Local pending operations are scoped to the immutable server user ID. Switching accounts does not send an old user's queue as a new user. An unknown request outcome remains recoverable. Do not delete the app while it contains unsent operations.

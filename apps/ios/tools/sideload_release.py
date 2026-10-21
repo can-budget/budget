@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from adhoc_release import ROOT, UTC, ReleaseError, build_number, run, source_info
+from adhoc_release import ROOT, UTC, ReleaseError, build_number, owner_settings, run, source_info
 
 OUTPUT = ROOT / "build/ios-sideload"
 BUNDLE = "com.canbudget.can"
@@ -80,9 +80,7 @@ def build() -> Path:
     version = run(["xcodebuild", "-version"]).decode()
     if not re.search(r"Xcode (?:2[6-9]|[3-9]\d)\.", version):
         raise ReleaseError("Select full Xcode 26 or later.")
-    owner = (ROOT / "apps/ios/Config/Owner.xcconfig").read_text()
-    origin_match = re.search(r"^CAN_API_BASE_URL\s*=\s*(\S+)\s*$", owner, re.MULTILINE)
-    origin = origin_match.group(1).replace("$()", "") if origin_match else ""
+    origin = owner_settings().get("CAN_API_BASE_URL", "").replace("$()", "")
     url = urlsplit(origin)
     if (
         url.scheme != "https"

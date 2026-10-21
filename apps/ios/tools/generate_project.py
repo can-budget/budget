@@ -29,7 +29,7 @@ def file(path, kind=None):
     kinds = {".swift": "sourcecode.swift", ".plist": "text.plist.xml", ".entitlements": "text.plist.entitlements", ".xcconfig": "text.xcconfig", ".xcprivacy": "text.plist.xml", ".json": "text.json", ".xcassets": "folder.assetcatalog"}
     return add("file:" + path, isa="PBXFileReference", lastKnownFileType=kind or kinds.get(Path(path).suffix, "text"), path=path, sourceTree="<group>")
 
-paths = sorted(str(p.relative_to(ROOT)) for folder in ["Can", "Shared", "CanWidget", "CanTests", "Config"] for p in (ROOT / folder).glob("*") if p.is_file() or p.suffix == ".xcassets")
+paths = sorted(str(p.relative_to(ROOT)) for folder in ["Can", "Shared", "CanWidget", "CanTests", "Config"] for p in (ROOT / folder).glob("*") if (p.is_file() or p.suffix == ".xcassets") and p.name != "Local.xcconfig")
 refs = {path: file(path) for path in paths}
 products = {}
 for target, suffix, kind in [("Can", ".app", "wrapper.application"), ("CanWidget", ".appex", "wrapper.app-extension"), ("CanTests", ".xctest", "wrapper.cfbundle")]:
@@ -71,6 +71,8 @@ for name in products:
     if name == "Can": settings.update({"PRODUCT_BUNDLE_IDENTIFIER": "$(CAN_BUNDLE_ID)", "INFOPLIST_FILE": "Can/Info.plist", "CODE_SIGN_ENTITLEMENTS": "Config/Can.entitlements", "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon"})
     elif name == "CanWidget": settings.update({"PRODUCT_BUNDLE_IDENTIFIER": "$(CAN_WIDGET_BUNDLE_ID)", "INFOPLIST_FILE": "CanWidget/Info.plist", "CODE_SIGN_ENTITLEMENTS": "Config/Widget.entitlements", "APPLICATION_EXTENSION_API_ONLY": "YES", "SKIP_INSTALL": "YES", "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks"]})
     else: settings.update({"PRODUCT_BUNDLE_IDENTIFIER": "$(CAN_BUNDLE_ID).tests", "GENERATE_INFOPLIST_FILE": "YES", "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/Can.app/Can", "BUNDLE_LOADER": "$(TEST_HOST)"})
+    if name != "CanTests":
+        settings.update({"INFOPLIST_PREPROCESS": "YES", "INFOPLIST_PREPROCESSOR_DEFINITIONS": "CAN_API_HOST_NAME=$(CAN_API_HOST)"})
     add("target:" + name, isa="PBXNativeTarget", buildConfigurationList=configs(name, settings), buildPhases=phases, buildRules=[], dependencies=[widget_dependency] if name == "Can" else [test_dependency] if name == "CanTests" else [], name=name, productName=name, productReference=products[name], productType={"Can": "com.apple.product-type.application", "CanWidget": "com.apple.product-type.app-extension", "CanTests": "com.apple.product-type.bundle.unit-test"}[name])
 
 project = add("project", isa="PBXProject", attributes={"BuildIndependentTargetsInParallel": "YES", "LastUpgradeCheck": "2600", "TargetAttributes": {target_ids[n]: {"CreatedOnToolsVersion": "26.0"} for n in target_ids}}, buildConfigurationList=configs("Project", {"CLANG_ENABLE_MODULES": "YES", "CLANG_ENABLE_OBJC_ARC": "YES", "SWIFT_VERSION": "5.0", "IPHONEOS_DEPLOYMENT_TARGET": "17.0"}), compatibilityVersion="Xcode 14.0", developmentRegion="ru", hasScannedForEncodings="0", knownRegions=["ru", "en", "Base"], mainGroup=main_group, productRefGroup=product_group, projectDirPath="", projectRoot="", targets=list(target_ids.values()))

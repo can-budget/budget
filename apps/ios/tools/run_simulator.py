@@ -4,7 +4,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import shlex
 import subprocess
 import sys
@@ -12,6 +11,8 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
+
+from adhoc_release import owner_settings
 
 ROOT = Path(__file__).resolve().parents[3]
 TOOLS = Path(__file__).resolve().parent
@@ -28,15 +29,15 @@ def read_json(command: list[str]) -> dict:
 
 
 def api_origin() -> str:
-    config = (ROOT / "apps/ios/Config/Owner.xcconfig").read_text()
-    match = re.search(r"^CAN_API_BASE_URL\s*=\s*(\S+)\s*$", config, re.MULTILINE)
-    if match is None:
+    configured = owner_settings().get("CAN_API_BASE_URL", "")
+    if not configured:
         raise ValueError("CAN_API_BASE_URL is missing")
-    origin = match[1].replace("$()", "")
+    origin = configured.replace("$()", "")
     url = urlsplit(origin)
     if (
         url.scheme != "https"
         or not url.hostname
+        or url.hostname.endswith(".invalid")
         or url.username
         or url.password
         or url.path

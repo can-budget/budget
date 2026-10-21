@@ -1,0 +1,547 @@
+[
+  {
+    "name": "v2_edit_current_bank",
+    "input": {
+      "initial_minor": 900000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-19",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": 180000
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 1020000,
+      "today_remaining_minor": 60000,
+      "days_remaining": 9,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_change_end_date",
+    "input": {
+      "initial_minor": 900000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-19",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": 0,
+          "end_date": "2026-10-16"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 840000,
+      "today_remaining_minor": 90000,
+      "days_remaining": 6,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_change_bank_and_date",
+    "input": {
+      "initial_minor": 900000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-19",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": 180000,
+          "end_date": "2026-10-16"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 1020000,
+      "today_remaining_minor": 120000,
+      "days_remaining": 6,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_late_expense_not_absorbed",
+    "input": {
+      "initial_minor": 900000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-19",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 70000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": 180000,
+          "end_date": "2026-10-16"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 1010000,
+      "today_remaining_minor": 110000,
+      "days_remaining": 6,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_zero_bank_allowed",
+    "input": {
+      "initial_minor": 900000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-19",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": -840000
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 0,
+      "today_remaining_minor": -53334,
+      "days_remaining": 9,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_negative_bank_allowed",
+    "input": {
+      "initial_minor": 900000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-19",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": -850000
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": -10000,
+      "today_remaining_minor": -54445,
+      "days_remaining": 9,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_last_day_change",
+    "input": {
+      "initial_minor": 900000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-19",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": 180000,
+          "end_date": "2026-10-11"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 1020000,
+      "today_remaining_minor": 1020000,
+      "days_remaining": 1,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_completed_after_shortening",
+    "input": {
+      "initial_minor": 900000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-19",
+      "as_of_date": "2026-10-12",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": 180000,
+          "end_date": "2026-10-11"
+        }
+      ]
+    },
+    "expected": {
+      "status": "completed",
+      "bank_minor": 1020000,
+      "today_remaining_minor": null,
+      "days_remaining": 0,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_multiple_changes_same_day",
+    "input": {
+      "initial_minor": 900000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-19",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": 180000,
+          "end_date": "2026-10-16"
+        },
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 2,
+          "bank_adjustment_minor": -60000,
+          "end_date": "2026-10-18"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 960000,
+      "today_remaining_minor": 67500,
+      "days_remaining": 8,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_do_not_rewrite_yesterday",
+    "input": {
+      "initial_minor": 1000000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-20",
+      "as_of_date": "2026-10-12",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "choices": {
+        "2026-10-12": "today"
+      },
+      "revisions": [
+        {
+          "effective_day": "2026-10-12",
+          "sequence": 1,
+          "bank_adjustment_minor": 0,
+          "end_date": "2026-10-17"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 940000,
+      "today_remaining_minor": 190000,
+      "days_remaining": 6,
+      "carry_minor": 40000,
+      "carry_status": "selected_today",
+      "today_mode_remaining_minor": 190000,
+      "distribute_remaining_minor": 156666
+    }
+  },
+  {
+    "name": "v2_asof_before_revision",
+    "input": {
+      "initial_minor": 1000000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-20",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "choices": {
+        "2026-10-12": "today"
+      },
+      "revisions": [
+        {
+          "effective_day": "2026-10-12",
+          "sequence": 1,
+          "bank_adjustment_minor": 0,
+          "end_date": "2026-10-17"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 940000,
+      "today_remaining_minor": 40000,
+      "days_remaining": 10,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_yesterday_late_expense_reduces_carry",
+    "input": {
+      "initial_minor": 1000000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-20",
+      "as_of_date": "2026-10-12",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 70000
+        }
+      ],
+      "choices": {
+        "2026-10-12": "today"
+      },
+      "revisions": [
+        {
+          "effective_day": "2026-10-12",
+          "sequence": 1,
+          "bank_adjustment_minor": 0,
+          "end_date": "2026-10-17"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 930000,
+      "today_remaining_minor": 180000,
+      "days_remaining": 6,
+      "carry_minor": 30000,
+      "carry_status": "selected_today",
+      "today_mode_remaining_minor": 180000,
+      "distribute_remaining_minor": 155000
+    }
+  },
+  {
+    "name": "v2_carry_and_adjustment",
+    "input": {
+      "initial_minor": 1000000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-20",
+      "as_of_date": "2026-10-12",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 60000
+        }
+      ],
+      "choices": {
+        "2026-10-12": "today"
+      },
+      "revisions": [
+        {
+          "effective_day": "2026-10-12",
+          "sequence": 1,
+          "bank_adjustment_minor": 20000,
+          "end_date": "2026-10-17"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 960000,
+      "today_remaining_minor": 193333,
+      "days_remaining": 6,
+      "carry_minor": 40000,
+      "carry_status": "selected_today",
+      "today_mode_remaining_minor": 193333,
+      "distribute_remaining_minor": 159999
+    }
+  },
+  {
+    "name": "v2_late_prior_day_fixed_delta",
+    "input": {
+      "initial_minor": 1000000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-20",
+      "as_of_date": "2026-10-12",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 70000
+        }
+      ],
+      "choices": {
+        "2026-10-12": "today"
+      },
+      "revisions": [
+        {
+          "effective_day": "2026-10-12",
+          "sequence": 1,
+          "bank_adjustment_minor": 20000,
+          "end_date": "2026-10-17"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 950000,
+      "today_remaining_minor": 183333,
+      "days_remaining": 6,
+      "carry_minor": 30000,
+      "carry_status": "selected_today",
+      "today_mode_remaining_minor": 183333,
+      "distribute_remaining_minor": 158333
+    }
+  },
+  {
+    "name": "v2_aggregate_topup_with_adjustment",
+    "input": {
+      "initial_minor": 10000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-13",
+      "as_of_date": "2026-10-11",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "topups_minor": 1
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-11",
+          "sequence": 1,
+          "bank_adjustment_minor": 2
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 10003,
+      "today_remaining_minor": 3334,
+      "days_remaining": 3,
+      "carry_minor": 0,
+      "carry_status": "none",
+      "today_mode_remaining_minor": null,
+      "distribute_remaining_minor": null
+    }
+  },
+  {
+    "name": "v2_extension_before_expiry",
+    "input": {
+      "initial_minor": 100000,
+      "start_date": "2026-10-11",
+      "end_date": "2026-10-12",
+      "as_of_date": "2026-10-12",
+      "days": [
+        {
+          "day": "2026-10-11",
+          "expenses_minor": 20000
+        }
+      ],
+      "revisions": [
+        {
+          "effective_day": "2026-10-12",
+          "sequence": 1,
+          "bank_adjustment_minor": 0,
+          "end_date": "2026-10-14"
+        }
+      ]
+    },
+    "expected": {
+      "status": "active",
+      "bank_minor": 80000,
+      "today_remaining_minor": 26666,
+      "days_remaining": 3,
+      "carry_minor": 30000,
+      "carry_status": "pending",
+      "today_mode_remaining_minor": 46666,
+      "distribute_remaining_minor": 26666
+    }
+  }
+]
