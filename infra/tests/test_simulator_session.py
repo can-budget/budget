@@ -4,6 +4,7 @@ import importlib.util
 import json
 import shlex
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock
@@ -17,7 +18,11 @@ ROOT = Path(__file__).resolve().parents[2]
 def load(name):
     spec = importlib.util.spec_from_file_location(name, ROOT / "apps/ios/tools" / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(ROOT / "apps/ios/tools"))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
     return module
 
 

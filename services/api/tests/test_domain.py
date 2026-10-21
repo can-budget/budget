@@ -6,7 +6,7 @@ import pytest
 from can_api.budget import MAX_EXPOSURE, project
 
 FIXTURES = (
-    Path(__file__).resolve().parents[3] / "Can_Developer_Handoff_v1.1/reference/golden_cases.json"
+    Path(__file__).resolve().parents[3] / "reference/calculations/golden_cases.json"
 )
 
 

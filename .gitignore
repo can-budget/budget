@@ -89,8 +89,19 @@ backups/
 /.codex/
 /.audit/
 /.agent-workspace
+AGENTS.md
+CLAUDE.md
+/design-qa.md
+/docs/IMPLEMENTATION_STATUS.md
+/docs/ACCEPTANCE_RECORD.md
+/docs/design/
+/Can_Developer_Handoff_v1.1/
+*.shortcut
+*.mobiledevicepairing
+pairing/
+/apps/ios/Config/Local.xcconfig
 
-# Duplicate handoff attachments; the unpacked reference remains a CI input
+# Original planning attachments are local archives; executable references live in reference/
 /Can_Developer_Handoff_v1.1.zip
 /Can_System_Design_v1.1.md
 /Can_Message_To_Developer_v1.1.md

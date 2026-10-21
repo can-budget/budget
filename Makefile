@@ -22,9 +22,9 @@ test-postgres:
 test-one:
 	$(PYTHON) -m pytest $(TEST)
 reference-check:
-	cd Can_Developer_Handoff_v1.1/reference && $(abspath $(PYTHON)) -m unittest -v test_budget_engine.py
+	cd reference/calculations && $(abspath $(PYTHON)) -m unittest -v test_budget_engine.py
 contract-check:
-	$(PYTHON) Can_Developer_Handoff_v1.1/qa/verify_contracts.py
+	$(PYTHON) reference/qa/verify_contracts.py
 	$(PYTHON) scripts/verify_contract.py
 infra-check:
 	$(PYTHON) infra/static_check.py

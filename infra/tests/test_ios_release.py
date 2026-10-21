@@ -351,3 +351,16 @@ def test_unconfigured_team_cannot_reach_archive_or_device_install(
     with pytest.raises(release.ReleaseError, match="CAN_DEVELOPMENT_TEAM"):
         release.settings()
     command.assert_not_called()
+
+
+def test_local_configuration_overrides_public_defaults_without_modifying_them(tmp_path, monkeypatch):
+    path = tmp_path / "apps/ios/Config"
+    path.mkdir(parents=True)
+    public = "CAN_API_BASE_URL = https:/$()/api.example.invalid\nCAN_DEVELOPMENT_TEAM = YOUR_TEAM_ID\n"
+    (path / "Owner.xcconfig").write_text(public)
+    (path / "Local.xcconfig").write_text("CAN_API_BASE_URL = https:/$()/api.example.com\n")
+    monkeypatch.setattr(release, "ROOT", tmp_path)
+    values = release.owner_settings()
+    assert values["CAN_API_BASE_URL"] == "https:/$()/api.example.com"
+    assert values["CAN_DEVELOPMENT_TEAM"] == "YOUR_TEAM_ID"
+    assert (path / "Owner.xcconfig").read_text() == public

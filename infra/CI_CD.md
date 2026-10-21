@@ -1,19 +1,8 @@
 # Backend delivery from main
 
-This is the backend pipeline and activation runbook. The server was bootstrapped
-on 2026-10-19 from source `5a5afd814d567340c93dba58fc940c4312147432` and its
-published GHCR image. PostgreSQL, API, worker and Caddy passed health checks;
-public HTTPS readiness returned 200 with `recovery_mode=single_server`.
-Root-owned runtime configuration and the healthy `current` baseline are present.
-GitHub's production environment contains the dedicated SSH credentials and host variables.
-iOS now has a separate `Verify iOS` workflow and does not gate backend publication
-or deployment. Its delivery is described in [IOS_DELIVERY.md](../docs/IOS_DELIVERY.md).
+GitHub Actions verifies the backend and disposable PostgreSQL tests, publishes a GHCR image, and delivers its immutable digest through the restricted production receiver. The iOS workflow is independent and does not gate backend deployment.
 
-The owner's 2026-10-19 decision selects `CAN_RECOVERY_MODE=single_server`: one
-VPS, persistent local PostgreSQL, no backups or external storage. Automatic
-updates still validate source/image identity, serialize releases, migrate forward
-and wait for real health. The backup step and external-journal requirements apply
-only to the optional `off_host` mode. Server loss means losing application data.
+The default personal deployment uses `CAN_RECOVERY_MODE=single_server`; off-host backups are optional and require separate configuration. For your own fork, update the canonical repository guards in `.github/workflows/verify.yml` and the bound GHCR image identities in the sender/receiver/deployer before enabling deployment. Forks do not inherit production secrets or permission to deploy to the maintainer’s server.
 
 ## Branches and normal releases
 
@@ -51,14 +40,7 @@ same immutable image. Runtime source/image/health checks remain mandatory.
 
 ## GitHub configuration
 
-The existing `production` environment is restricted to branch `main` and has no
-manual-review gate. On 2026-10-19 GitHub returned that environment, its branch
-policy, dedicated SSH secret names and host variables; the previous main deploy
-used them successfully to reach the receiver. Keep this environment requirement.
-The organization's API reports plan `free`, and the branch-protection API returns
-HTTP 403. Required PR checks and force-push protection therefore remain outside
-the verified configuration; workflow conditions do not replace branch protection.
-Do not change repository visibility or purchase a plan automatically.
+Configure a `production` environment with a deployment branch policy restricted to `main`. Keep the dedicated SSH key and verified host keys in environment secrets. After making a repository public, verify branch protection, fork workflow approval, read-only default workflow permissions and secret scanning. Public workflow definitions and logs are visible to visitors; secret values remain private.
 
 | Environment setting | Type | Value / purpose |
 | --- | --- | --- |
@@ -81,8 +63,7 @@ credential is sent to the server. The image is associated with `can-budget/budge
 source label. Keep package visibility private and allow this repository to publish
 the package. For an already existing package, check its Actions access explicitly.
 The bound connection confirms `can-budget/budget` as the repository target.
-`ghcr.io/can-budget/budget-api` is verified private and associated with this repo;
-the main publication job succeeded.
+The canonical image is `ghcr.io/can-budget/budget-api`. Package visibility is configured separately from repository visibility; verify registry access on your own deployment.
 
 For automatic pulls, the sender prefixes the infra archive with a bounded JSON
 envelope containing the deploy job's short-lived, read-only `GITHUB_TOKEN`. It
@@ -102,12 +83,7 @@ outbound GHCR/Apple/backup access. The inspected VPS has 2 vCPU, 1.8 GiB usable
 RAM and a 58 GiB system disk; application capacity has not been measured. Builds run in GitHub
 to avoid putting compiler/package-install load on the small production VPS.
 
-The owner selected direct IP HTTPS: `CAN_DOMAIN=151.243.217.6`. The name of this
-setting is retained for compatibility; no ACME email or domain purchase is
-required. See [IP HTTPS bootstrap](README.md#https-on-the-public-ip) for explicit
-public ACME issuance, no-SNI clients, persistent renewal state and starting the
-production Caddy service before application credentials are available. This
-ingress-only stage does not satisfy the healthy baseline required by CD.
+Set `CAN_DOMAIN` to your public IPv4 or DNS host. For an IP endpoint, follow [IP HTTPS bootstrap](README.md#https-on-the-public-ip): issuance, renewal state and no-SNI clients are configured explicitly. An ingress-only startup is not the healthy backend baseline required by CD.
 
 Follow [production operations](README.md) for credentials and PostgreSQL bootstrap.
 External journals, backup timers and restore drills are not used in the selected
@@ -143,13 +119,6 @@ the operator's Docker credential store. It does not write credentials,
 start production containers. Through the HQ SSH broker, run long package
 installation as a remote job and inspect its exit status separately; a successful
 job launch alone does not establish completed preparation.
-
-On 2026-10-14 this helper at `b76ae3f` completed successfully on the bound VPS.
-Independent checks verified the backup executables, existing operator account,
-runtime group, directory permissions and installed receiver digest. The existing
-operator uses `/bin/sh`, which is supported without changing its shell. Runtime
-configuration, credentials, CI authorized key and application bootstrap remain
-separate activation steps.
 
 Install the reviewed receiver once from this repository:
 

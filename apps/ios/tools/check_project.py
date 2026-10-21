@@ -73,6 +73,9 @@ for name, (identifier, target) in targets.items():
         assert settings["IPHONEOS_DEPLOYMENT_TARGET"] == "17.0"
         assert settings["CAN_APNS_ENTITLEMENT_ENVIRONMENT"] == ("development" if config["name"] == "Debug" else "production")
         assert settings["CAN_APNS_ENVIRONMENT"] == ("sandbox" if config["name"] == "Debug" else "production")
+        if name != "CanTests":
+            assert settings["INFOPLIST_PREPROCESS"] == "YES"
+            assert settings["INFOPLIST_PREPROCESSOR_DEFINITIONS"] == "CAN_API_HOST_NAME=$(CAN_API_HOST)"
 
 scheme = ET.parse(ROOT / "Can.xcodeproj/xcshareddata/xcschemes/Can.xcscheme")
 assert scheme.find(".//TestableReference/BuildableReference").attrib["BlueprintIdentifier"] == targets["CanTests"][0]
@@ -82,7 +85,11 @@ endpoint = urlsplit(endpoint_setting.group(1).replace("$()", ""))
 assert endpoint.scheme == "https" and endpoint.hostname, "The API origin must use HTTPS"
 assert endpoint.username is None and endpoint.password is None and endpoint.port is None
 assert not endpoint.path and not endpoint.query and not endpoint.fragment, "The API origin cannot contain URL components"
-expected_ats = {}
+expected_ats = {"NSExceptionDomains": {"CAN_API_HOST_NAME": {
+    "NSExceptionAllowsInsecureHTTPLoads": False,
+    "NSExceptionMinimumTLSVersion": "TLSv1.2",
+    "NSExceptionRequiresForwardSecrecy": True,
+}}}
 try:
     endpoint_ip = ipaddress.ip_address(endpoint.hostname)
 except ValueError:
@@ -90,11 +97,6 @@ except ValueError:
 else:
     assert endpoint_ip.version == 4 and endpoint_ip.is_global and not endpoint_ip.is_multicast, "Only public IPv4 endpoints are supported"
     # iOS 17+ requires an explicit IP entry; retain HTTPS and the default TLS protections.
-    expected_ats = {"NSExceptionDomains": {str(endpoint_ip): {
-        "NSExceptionAllowsInsecureHTTPLoads": False,
-        "NSExceptionMinimumTLSVersion": "TLSv1.2",
-        "NSExceptionRequiresForwardSecrecy": True,
-    }}}
 for folder, entitlement in [("Can", "Can.entitlements"), ("CanWidget", "Widget.entitlements")]:
     info = plistlib.loads((ROOT / folder / "Info.plist").read_bytes())
     assert info["CanAPIBaseURL"] == "$(CAN_API_BASE_URL)"
@@ -111,7 +113,7 @@ assert icon.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 assert struct.unpack(">II", icon.read_bytes()[16:24]) == (1024, 1024)
 fixtures = ROOT / "CanTests/golden_cases.json"
 assert len(json.loads(fixtures.read_text())) == 240
-reference = ROOT.parents[1] / "Can_Developer_Handoff_v1.1/reference"
+reference = ROOT.parents[1] / "reference/calculations"
 original_engine = next(reference.rglob("BudgetEngine.swift"))
 original_fixtures = next(reference.rglob("golden_cases.json"))
 for copy, original in [(ROOT / "Shared/BudgetEngine.swift", original_engine), (fixtures, original_fixtures)]:

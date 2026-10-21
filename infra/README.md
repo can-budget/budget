@@ -1,20 +1,6 @@
 # Can production operations
 
-This directory targets one owner-controlled production server. The user's later
-instruction supersedes the handoff's permanent staging requirement. Disposable CI
-databases and isolated recovery drills are not permanent staging environments.
-
-On 2026-10-19 the owner explicitly selected **one VPS with no backups** for this
-personal application and accepted rebuilding from scratch after server loss.
-Set `CAN_RECOVERY_MODE=single_server` for this deployment. No backup/journal
-replication timers, external storage or archive restoration are required or
-claimed in this mode. PostgreSQL data remains in its persistent local volume.
-The `off_host` mode and recovery tools below are optional retained capabilities;
-they require an explicit future configuration change and real storage.
-
-These are executable configuration and recovery tools, not evidence of a deployed
-service. Docker, TLS issuance, Apple credentials, live APNs and a real restore
-must be validated on the owner's infrastructure before release.
+Self-hosted FastAPI, PostgreSQL, worker and Caddy on one Linux server. `CAN_RECOVERY_MODE=single_server` keeps data on the local persistent volume and skips off-host backup requirements. Server/disk loss can lose all data. The optional `off_host` mode below adds independently configured storage and recovery tooling.
 
 ## Runtime and credentials
 
@@ -46,7 +32,7 @@ interactive environment, without storing them in tracked files:
 | `CAN_RELEASE` | Reviewed source revision / fallback local image tag; keep it stable during recovery |
 | `CAN_RECOVERY_MODE` | Owner-selected `single_server`; `off_host` requires the optional independent backup/journal setup below |
 | `CAN_IMAGE` | Optional immutable GHCR image reference; required by automatic delivery, overrides the local tag |
-| `CAN_DOMAIN` | Public API host without scheme/port/path; current owner choice is `151.243.217.6` |
+| `CAN_DOMAIN` | Public API host without scheme/port/path; set this to your own host |
 | `CAN_SECRETS_DIR` | Absolute owner-managed directory outside the checkout |
 | `CAN_DELETION_JOURNAL_DIR` | Persistent private journal directory, normally `/var/lib/can-deletions` |
 | `CAN_APPLE_CLIENT_ID`, `CAN_APPLE_TEAM_ID`, `CAN_APPLE_KEY_ID` | Optional until Apple activation: owner app Bundle ID, team and Sign in with Apple key identifiers |
@@ -100,8 +86,7 @@ Encryption-key replacement also requires data re-encryption or retained old keys
 
 ## HTTPS on the public IP
 
-The owner selected `https://151.243.217.6` on 2026-10-17. No purchased domain,
-DNS record or ACME email is required for this deployment. The legacy setting
+A public IPv4 address can serve HTTPS without a purchased domain or DNS record. The legacy setting
 name `CAN_DOMAIN` is retained; it accepts a DNS hostname or a canonical global
 IPv4 address. Local/reserved IPs, alternative numeric forms and IPv6 are rejected
 by the automatic deployer. Keep the public IP reserved: changing it requires an
@@ -121,7 +106,7 @@ From a reviewed checkout, ensure 80/443 are free and no existing application
 deployment owns this Compose project, then run:
 
 ```sh
-export CAN_DOMAIN=151.243.217.6
+export CAN_DOMAIN=YOUR_PUBLIC_IP # Replace with your actual globally routable IPv4
 docker compose --project-name can-production --env-file /dev/null -f infra/compose.ingress.yaml config --quiet
 docker compose --project-name can-production --env-file /dev/null -f infra/compose.ingress.yaml pull caddy
 docker compose --project-name can-production --env-file /dev/null -f infra/compose.ingress.yaml run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
@@ -140,8 +125,8 @@ Never run `down --volumes` during this transition.
 Check both public trust and IP identity without `-k` / `--insecure`:
 
 ```sh
-curl --silent --show-error --output /dev/null --write-out '%{http_code}\n' https://151.243.217.6/health/ready
-openssl s_client -connect 151.243.217.6:443 -noservername -verify_ip 151.243.217.6 -verify_return_error </dev/null
+curl --silent --show-error --output /dev/null --write-out '%{http_code}\n' "https://$CAN_DOMAIN/health/ready"
+openssl s_client -connect "$CAN_DOMAIN:443" -noservername -verify_ip "$CAN_DOMAIN" -verify_return_error </dev/null
 ```
 
 Before the API exists, a non-2xx HTTP response is expected; a certificate error
