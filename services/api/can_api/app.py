@@ -34,7 +34,13 @@ from .ledger import (
 from .passwords import normalize_login
 from .security import digest, encrypt, identity, invitation_digest, now, rate_limit, token
 
-app = FastAPI(title="Can shared budget API", version="1.4.0")
+app = FastAPI(
+    title="Can shared budget API",
+    version="1.4.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 app.include_router(auth_router)
 
 
