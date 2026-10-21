@@ -18,6 +18,19 @@ BUNDLE = "com.canbudget.can"
 GROUP = "group." + BUNDLE
 
 
+def prepare_registration_names(app: Path) -> None:
+    # SideStore passes the raw display name to Apple's ASCII-only appIdName API.
+    # iOS reads the original Russian display name from the localized resource.
+    for target, name in [(app, "Can"), (app / "PlugIns/CanWidget.appex", "CanWidget")]:
+        path = target / "Info.plist"
+        info = plistlib.loads(path.read_bytes())
+        localized = target / "ru.lproj/InfoPlist.strings"
+        localized.parent.mkdir(exist_ok=True)
+        localized.write_bytes(plistlib.dumps({"CFBundleDisplayName": info["CFBundleDisplayName"]}))
+        info.update(CFBundleDisplayName=name, CFBundleName=name)
+        path.write_bytes(plistlib.dumps(info))
+
+
 def inspect_payload(app: Path, origin: str) -> dict:
     run(["codesign", "--verify", "--deep", "--strict", str(app)])
     extensions = list((app / "PlugIns").glob("*.appex"))
@@ -26,6 +39,9 @@ def inspect_payload(app: Path, origin: str) -> dict:
     infos = []
     for target, identifier in [(app, BUNDLE), (extensions[0], BUNDLE + ".widget")]:
         info = plistlib.loads((target / "Info.plist").read_bytes())
+        name = "Can" if target == app else "CanWidget"
+        if info.get("CFBundleDisplayName") != name or info.get("CFBundleName") != name:
+            raise ReleaseError("SideStore registration requires Latin app and widget names.")
         if any(
             info.get(key) != value
             for key, value in {
@@ -114,6 +130,7 @@ def build() -> Path:
         directory / "archive.log",
     )
     app = archive / "Products/Applications/Can.app"
+    prepare_registration_names(app)
     # A local anonymous signature preserves capabilities for SideStore's importer.
     # This is NOT Apple provisioning and does not make the IPA installable by itself.
     rights = directory / "SideStore.entitlements"

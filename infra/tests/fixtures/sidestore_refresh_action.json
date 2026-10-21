@@ -1,0 +1,10 @@
+{
+  "source": "Working iPhone export, iOS 26.7.1, SideStore 0.7.0-20260911.328+6032424a; public signing identity replaced with a test identity",
+  "WFWorkflowActionIdentifier": "com.SideStore.SideStore.ABC1234567.RefreshAllIntent",
+  "AppIntentDescriptor": {
+    "TeamIdentifier": "ABC1234567",
+    "BundleIdentifier": "com.SideStore.SideStore.ABC1234567",
+    "Name": "SideStore",
+    "AppIntentIdentifier": "RefreshAllIntent"
+  }
+}

@@ -24,6 +24,8 @@ def fixture_app(tmp_path):
         target.mkdir(parents=True, exist_ok=True)
         info = {
             "CFBundleIdentifier": bundle,
+            "CFBundleDisplayName": "Can" if target == app else "CanWidget",
+            "CFBundleName": "Can" if target == app else "CanWidget",
             "CFBundleSupportedPlatforms": ["iPhoneOS"],
             "CanDistribution": "sideload",
             "CanPushEnabled": "NO",
@@ -34,6 +36,24 @@ def fixture_app(tmp_path):
         }
         (target / "Info.plist").write_bytes(plistlib.dumps(info))
     return app, targets
+
+
+def test_registration_uses_latin_names_and_preserves_russian_home_screen_names(tmp_path):
+    app, targets = fixture_app(tmp_path)
+    original_names = ["Можно", "Можно сегодня"]
+    for target, name in zip(targets, original_names, strict=True):
+        path = target / "Info.plist"
+        info = plistlib.loads(path.read_bytes())
+        info["CFBundleDisplayName"] = name
+        path.write_bytes(plistlib.dumps(info))
+
+    release.prepare_registration_names(app)
+
+    for target, name, original in zip(targets, ["Can", "CanWidget"], original_names, strict=True):
+        info = plistlib.loads((target / "Info.plist").read_bytes())
+        assert info["CFBundleDisplayName"] == info["CFBundleName"] == name
+        localized = plistlib.loads((target / "ru.lproj/InfoPlist.strings").read_bytes())
+        assert localized["CFBundleDisplayName"] == original
 
 
 @pytest.mark.parametrize(
@@ -47,6 +67,8 @@ def fixture_app(tmp_path):
         "different-version",
         "foreign-profile",
         "apple-signin",
+        "russian-app-name",
+        "russian-widget-name",
     ],
 )
 def test_sideload_payload_rejects_wrong_platform_capabilities_or_widget(
@@ -66,6 +88,12 @@ def test_sideload_payload_rejects_wrong_platform_capabilities_or_widget(
         info["CFBundleVersion"] = "43"
     elif case == "foreign-profile":
         (app / "embedded.mobileprovision").write_bytes(b"some other account")
+    elif case == "russian-app-name":
+        app_info = plistlib.loads((app / "Info.plist").read_bytes())
+        app_info["CFBundleDisplayName"] = "Можно"
+        (app / "Info.plist").write_bytes(plistlib.dumps(app_info))
+    elif case == "russian-widget-name":
+        info["CFBundleDisplayName"] = "Можно сегодня"
     if case != "missing-widget":
         (targets[1] / "Info.plist").write_bytes(plistlib.dumps(info))
     rights = {"com.apple.security.application-groups": [release.GROUP]}

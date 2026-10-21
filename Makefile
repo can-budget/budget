@@ -2,11 +2,11 @@ PYTHON ?= .venv/bin/python
 export IOS_DESTINATION
 API_ROOT := services/api
 SIMULATOR_TOOLS := apps/ios/tools/run_simulator.py apps/ios/tools/issue_simulator_session.py
-IOS_TOOLS := $(SIMULATOR_TOOLS) apps/ios/tools/adhoc_release.py apps/ios/tools/sideload_release.py
+IOS_TOOLS := $(SIMULATOR_TOOLS) apps/ios/tools/adhoc_release.py apps/ios/tools/sideload_release.py apps/ios/tools/refresh_shortcut.py
 export IOS_DEVICE IOS_IPA IOS_BUILD_NUMBER
 export PYTHONPATH := $(CURDIR)/$(API_ROOT)
 
-.PHONY: install dev test test-unit test-postgres test-one reference-check contract-check infra-check infra-test ios-project-check secret-check lint format typecheck verify ios-test ios-build ios-simulator ios-doctor ios-release ios-inspect ios-devices ios-install ios-sideload
+.PHONY: install dev test test-unit test-postgres test-one reference-check contract-check infra-check infra-test ios-project-check secret-check lint format typecheck verify ios-test ios-build ios-simulator ios-doctor ios-release ios-inspect ios-devices ios-install ios-sideload ios-refresh-shortcut ios-refresh-send
 install:
 	python3 scripts/bootstrap.py
 	$(PYTHON) -m pip install -c services/api/requirements-dev.lock -e './services/api[dev]'
@@ -60,3 +60,7 @@ ios-install:
 	python3 apps/ios/tools/adhoc_release.py install
 ios-sideload:
 	python3 apps/ios/tools/sideload_release.py
+ios-refresh-shortcut:
+	python3 apps/ios/tools/refresh_shortcut.py
+ios-refresh-send:
+	python3 apps/ios/tools/refresh_shortcut.py --send
