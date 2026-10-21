@@ -1,7 +1,8 @@
-"""Update only the existing backend after a verified off-host backup.
+"""Update the existing backend with the selected recovery policy.
 
 The fixed SSH receiver validates and installs the reviewed infra bundle first.
-This entry does not bootstrap a server, change PostgreSQL/Caddy, or roll back SQL.
+Infrastructure stays fixed except for explicitly approved HTTP/1.1 hardening.
+This entry does not bootstrap a server, change PostgreSQL, or roll back SQL.
 Runtime configuration is a root-owned, non-secret KEY=value file; no shell eval.
 """
 
@@ -30,6 +31,8 @@ DOMAIN = re.compile(
     r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\Z"
 )
 MIGRATION_CONTAINER = "can-production-release-migrate"
+HTTP1_APPROVAL = Path("/etc/can/approved-http1-release")
+HTTP1_SERVER_POLICY = b"\tservers {\n\t\tprotocols h1\n\t}\n"
 RUNTIME_KEYS = {
     "DOCKER_CONFIG",
     "PYTHONDONTWRITEBYTECODE",
@@ -98,6 +101,20 @@ def load_runtime(path: Path, *, owner: int = 0) -> dict[str, str]:
     if result.get("PYTHONDONTWRITEBYTECODE", "1") != "1":
         raise DeployError("PYTHONDONTWRITEBYTECODE must remain enabled")
     return result
+
+
+def approved_http1_release(sha: str, path: Path | None = None, *, owner: int = 0) -> bool:
+    path = path if path is not None else HTTP1_APPROVAL
+    if not path.exists() and not path.is_symlink():
+        return False
+    trusted_path(path.parent, directory=True, owner=owner)
+    trusted_path(path, owner=owner)
+    if path.stat().st_size > 41:
+        raise DeployError("HTTP/1.1 maintenance approval must contain one source SHA")
+    content = path.read_bytes()
+    if not re.fullmatch(rb"[0-9a-f]{40}\n?", content):
+        raise DeployError("HTTP/1.1 maintenance approval must contain one source SHA")
+    return content.rstrip(b"\n") == sha.encode("ascii")
 
 
 def environment(runtime: dict[str, str], release: Path, identity: dict[str, Any]) -> dict[str, str]:
@@ -197,7 +214,14 @@ def normalize_release_paths(value: Any, release: Path) -> Any:
     return value
 
 
-def check_fixed_infrastructure(before: dict, after: dict, current: Path, candidate: Path) -> None:
+def check_fixed_infrastructure(
+    before: dict,
+    after: dict,
+    current: Path,
+    candidate: Path,
+    *,
+    allow_http1_hardening: bool = False,
+) -> bool:
     for name in ("db", "caddy"):
         if normalize_release_paths(before["services"][name], current) != normalize_release_paths(
             after["services"][name], candidate
@@ -210,14 +234,23 @@ def check_fixed_infrastructure(before: dict, after: dict, current: Path, candida
             raise DeployError(
                 "Persistent infrastructure changed; a separate owner maintenance is required"
             )
-    for relative in ("infra/caddy/Caddyfile", "infra/postgres/init.sql"):
-        if (current / relative).read_bytes() != (candidate / relative).read_bytes():
-            raise DeployError(
-                "Database bootstrap or Caddy source changed; owner maintenance is required"
-            )
+    if (current / "infra/postgres/init.sql").read_bytes() != (
+        candidate / "infra/postgres/init.sql"
+    ).read_bytes():
+        raise DeployError("Database bootstrap source changed; owner maintenance is required")
+    old_caddy = (current / "infra/caddy/Caddyfile").read_bytes()
+    new_caddy = (candidate / "infra/caddy/Caddyfile").read_bytes()
+    harden_ingress = old_caddy != new_caddy
+    if harden_ingress and not (
+        allow_http1_hardening
+        and old_caddy.startswith(b"{\n")
+        and new_caddy == b"{\n" + HTTP1_SERVER_POLICY + old_caddy[2:]
+    ):
+        raise DeployError("Caddy source changed; separate owner maintenance is required")
     for name in ("api", "worker", "migrate"):
         if after["services"][name]["image"] != after["services"]["api"]["image"]:
             raise DeployError("API, worker and migration must use one immutable image")
+    return harden_ingress
 
 
 def inspect_service(
@@ -469,7 +502,13 @@ def deploy(
         )
         if after["services"]["api"]["image"] != image:
             raise DeployError("Candidate Compose does not use the requested immutable image")
-        check_fixed_infrastructure(before, after, current, candidate)
+        harden_ingress = check_fixed_infrastructure(
+            before,
+            after,
+            current,
+            candidate,
+            allow_http1_hardening=approved_http1_release(sha),
+        )
         for service in ("db", "caddy"):
             inspect_service(commands, current, old_env, service)
         for service in ("api", "worker"):
@@ -560,6 +599,26 @@ def deploy(
             )
             for service in ("api", "worker"):
                 inspect_service(commands, candidate, new_env, service, image_id=image_id)
+            if harden_ingress:
+                commands.run(
+                    compose(candidate)
+                    + [
+                        "up",
+                        "--no-deps",
+                        "--no-build",
+                        "--pull",
+                        "never",
+                        "--force-recreate",
+                        "--wait",
+                        "--wait-timeout",
+                        "90",
+                        "caddy",
+                    ],
+                    new_env,
+                    "apply approved HTTP/1.1 ingress policy",
+                    120,
+                )
+                inspect_service(commands, candidate, new_env, "caddy")
             public_readiness(commands, new_env)
             completed = {
                 **identity,

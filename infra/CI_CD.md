@@ -38,6 +38,32 @@ and candidate releases. Without it, real Compose omits `migrate` from the JSON
 configuration, preventing verification that API, worker and migration use the
 same immutable image. Runtime source/image/health checks remain mandatory.
 
+## Temporary HTTP/1.1 ingress hardening
+
+Caddy serves HTTPS over HTTP/1.1 while its pinned stable release contains the
+affected HTTP/2 implementation described in [GO-2026-6603](https://pkg.go.dev/vuln/GO-2026-6603),
+[GO-2026-6610](https://pkg.go.dev/vuln/GO-2026-6610),
+[GO-2026-6611](https://pkg.go.dev/vuln/GO-2026-6611),
+[GO-2026-6612](https://pkg.go.dev/vuln/GO-2026-6612) and
+[GO-2026-6617](https://pkg.go.dev/vuln/GO-2026-6617). TLS, certificates and API
+authorization remain enabled. Reassess this policy after a patched stable Caddy
+release; enabling other protocols requires separate infrastructure maintenance.
+
+The initial change requires the owner to create `/etc/can/approved-http1-release`
+on the VPS with exactly the reviewed 40-character **merged main commit SHA** and
+an optional final newline. The file and its parent must be root-owned and not
+writable by group or others; mode `0644` allows the deployment operator to read
+the non-secret SHA. Create it before the deploy job, or rerun that job after
+approval. Remove the file after verifying the successful release.
+
+This approval permits only the exact insertion of `servers { protocols h1 }`
+into the existing Caddy global block. It does not permit changes to TLS,
+upstreams, container images, Compose settings, PostgreSQL or persistent storage.
+The approved release recreates Caddy with its existing certificate volumes,
+checks its health and public HTTPS before promotion. Ordinary backend updates
+do not restart Caddy. A failed maintenance does not promote the successful
+release record and requires forward recovery, as with other deployment failures.
+
 ## GitHub configuration
 
 Configure a `production` environment with a deployment branch policy restricted to `main`. Keep the dedicated SSH key and verified host keys in environment secrets. After making a repository public, verify branch protection, fork workflow approval, read-only default workflow permissions and secret scanning. Public workflow definitions and logs are visible to visitors; secret values remain private.
