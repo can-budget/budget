@@ -1,4 +1,7 @@
 {
+	servers {
+		protocols h1
+	}
 	# IP-literal HTTPS clients may omit SNI; Docker's local IP is different.
 	default_sni {$CAN_DOMAIN}
 }

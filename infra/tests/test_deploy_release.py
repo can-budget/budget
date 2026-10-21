@@ -385,6 +385,121 @@ def test_changed_mounted_source_requires_separate_owner_maintenance(setup, relat
     assert_old_release(setup)
 
 
+@pytest.fixture
+def http1_candidate(setup):
+    original = (
+        b"{\n\tdefault_sni {$CAN_DOMAIN}\n}\nhttps://{$CAN_DOMAIN} {\n\treverse_proxy api:8000\n}\n"
+    )
+    (setup.current / "infra/caddy/Caddyfile").write_bytes(original)
+    (setup.candidate / "infra/caddy/Caddyfile").write_bytes(
+        b"{\n\tservers {\n\t\tprotocols h1\n\t}\n" + original[2:]
+    )
+    return setup
+
+
+def test_http1_maintenance_requires_explicit_owner_approval(http1_candidate, monkeypatch):
+    monkeypatch.setattr(release, "approved_http1_release", lambda sha: False)
+    with pytest.raises(release.DeployError, match="owner maintenance"):
+        invoke(http1_candidate)
+    assert "pull reviewed image" not in stages(http1_candidate)
+    assert_old_release(http1_candidate)
+
+
+def test_approved_http1_maintenance_recreates_and_checks_ingress_before_promotion(
+    http1_candidate, monkeypatch
+):
+    monkeypatch.setattr(release, "approved_http1_release", lambda sha: sha == NEW_SHA)
+    invoke(http1_candidate)
+    calls = stages(http1_candidate)
+    maintenance = calls.index("apply approved HTTP/1.1 ingress policy")
+    assert calls[maintenance + 1 : maintenance + 4] == [
+        "locate caddy",
+        "inspect caddy",
+        "verify public HTTPS readiness",
+    ]
+    args = http1_candidate.commands.calls[maintenance][1]
+    assert args[-1] == "caddy"
+    assert {"--no-deps", "--no-build", "--force-recreate", "--wait"} <= set(args)
+    assert args[args.index("--pull") + 1] == "never"
+    assert (http1_candidate.root / "current").resolve() == http1_candidate.candidate
+
+
+@pytest.mark.parametrize("extra_change", ["upstream", "tls", "database", "image", "network"])
+def test_http1_approval_cannot_authorize_other_infrastructure_changes(
+    http1_candidate, monkeypatch, extra_change
+):
+    monkeypatch.setattr(release, "approved_http1_release", lambda sha: True)
+    path = http1_candidate.candidate / "infra/caddy/Caddyfile"
+    if extra_change == "upstream":
+        path.write_bytes(path.read_bytes().replace(b"api:8000", b"untrusted:8000"))
+    elif extra_change == "tls":
+        path.write_bytes(path.read_bytes() + b"\nhttp://unprotected.example.invalid {}\n")
+    elif extra_change == "database":
+        (http1_candidate.candidate / "infra/postgres/init.sql").write_text("changed bootstrap")
+    elif extra_change == "image":
+        http1_candidate.commands.candidate_mutation = lambda config: config["services"][
+            "caddy"
+        ].update(image="unreviewed-caddy")
+    else:
+        http1_candidate.commands.candidate_mutation = lambda config: config["networks"].update(
+            unexpected={}
+        )
+    with pytest.raises(release.DeployError, match="maintenance"):
+        invoke(http1_candidate)
+    assert "pull reviewed image" not in stages(http1_candidate)
+    assert_old_release(http1_candidate)
+
+
+@pytest.mark.parametrize("failure", ["command", "health"])
+def test_failed_http1_maintenance_never_promotes_release(http1_candidate, monkeypatch, failure):
+    monkeypatch.setattr(release, "approved_http1_release", lambda sha: True)
+    if failure == "command":
+        http1_candidate.commands.fail_stage = "apply approved HTTP/1.1 ingress policy"
+    else:
+        http1_candidate.commands.unhealthy_service = "caddy"
+    with pytest.raises(release.DeployError, match="No SQL/image rollback"):
+        invoke(http1_candidate)
+    assert "contain failed deployment" in stages(http1_candidate)
+    assert "verify public HTTPS readiness" not in stages(http1_candidate)
+    assert_old_release(http1_candidate)
+
+
+def test_http1_approval_is_bound_to_one_sha_in_a_protected_owner_file(tmp_path):
+    path = tmp_path / "approved-http1-release"
+    assert not release.approved_http1_release(NEW_SHA, path, owner=os.getuid())
+    path.write_text(NEW_SHA + "\n")
+    path.chmod(0o644)
+    assert release.approved_http1_release(NEW_SHA, path, owner=os.getuid())
+    assert not release.approved_http1_release(OLD_SHA, path, owner=os.getuid())
+    with pytest.raises(release.DeployError, match="ownership"):
+        release.approved_http1_release(NEW_SHA, path, owner=os.getuid() + 1)
+    for invalid in ("", "2" * 39, NEW_SHA + "\n\n", NEW_SHA + " ignored", "z" * 40):
+        path.write_text(invalid)
+        with pytest.raises(release.DeployError, match="one source SHA"):
+            release.approved_http1_release(NEW_SHA, path, owner=os.getuid())
+
+
+@pytest.mark.parametrize("unsafe", ["file_mode", "parent_mode", "symlink", "dangling_symlink"])
+def test_http1_approval_rejects_untrusted_paths(tmp_path, unsafe):
+    directory = tmp_path / "owner-config"
+    directory.mkdir(mode=0o755)
+    path = directory / "approved-http1-release"
+    path.write_text(NEW_SHA)
+    path.chmod(0o644)
+    if unsafe == "file_mode":
+        path.chmod(0o666)
+    elif unsafe == "parent_mode":
+        directory.chmod(0o777)
+    else:
+        path.unlink()
+        target = tmp_path / "other"
+        if unsafe == "symlink":
+            target.write_text(NEW_SHA)
+        path.symlink_to(target)
+    with pytest.raises(release.DeployError):
+        release.approved_http1_release(NEW_SHA, path, owner=os.getuid())
+
+
 def test_absent_bootstrap_never_creates_database_or_services(setup):
     (setup.root / "current").unlink()
     with pytest.raises(release.DeployError, match="bootstrap"):
