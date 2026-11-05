@@ -309,11 +309,18 @@ def replay(
 
 
 def apply_command(
-    c: Connection, user_id: Any, cabinet_id: Any, command: Command
+    c: Connection,
+    user_id: Any,
+    cabinet_id: Any,
+    command: Command,
+    *,
+    diagnostics: dict | None = None,
 ) -> tuple[dict, int]:
     cabinet = lock_cabinet(c, cabinet_id)
     request = command.model_dump(mode="json") | {"cabinet_id": str(cabinet_id)}
     old = receipt(c, user_id, command.command_id)
+    if diagnostics is not None:
+        diagnostics["replayed"] = old is not None
     if old:
         return replay(c, old, request, cabinet_id, user_id)
     membership = member(c, cabinet_id, user_id)
