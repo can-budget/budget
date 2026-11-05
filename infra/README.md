@@ -415,6 +415,34 @@ job selects the installed Xcode 26.3 to compile the widget push branch, builds
 app/widget without signing, and runs Swift fixtures and domain tests; it is not
 physical-device, signed archive or TestFlight acceptance.
 
+## Operation diagnostics
+
+The API emits structured JSON messages through the existing Uvicorn error logger, even with HTTP access logging disabled.
+Only POST requests to the canonical cabinet `commands` and `sync` routes are traced; health polling and authentication bodies are excluded.
+Existing Docker log rotation still limits retention. Financial command receipts and entry revisions in PostgreSQL remain the source for long-term reconciliation.
+
+For an authorized operator of the production host:
+
+```sh
+docker logs --since 30m can-production-api-1 2>&1 | rg '"event"|COMMAND_UUID|REQUEST_UUID'
+```
+
+Clients may send `X-Request-ID` for each HTTP attempt; existing app builds can omit it and receive a server-generated ID.
+`command_id` links the operation across retries for both existing and updated clients.
+Invalid incoming request IDs are replaced with generated UUIDs and never copied to the log.
+`request_started` alone proves arrival at middleware, not acceptance of a command.
+`transaction_committed` is emitted after the function-scoped transaction commits; a subsequent `http_response` includes status, duration and revision.
+`replayed: true` identifies a previously persisted receipt; it does not mean a second ledger mutation.
+A rejected command may commit its rejected receipt without changing the financial ledger.
+
+`transaction_failed_or_unknown` deliberately makes no rollback guarantee: a lost connection during COMMIT can leave its outcome unknown.
+Use the original command ID to query/replay its receipt. A failed COMMIT never logs the prepared result as applied.
+`http_response` is a server-side response event, not proof that the phone received the response.
+
+Amounts, bodies, tokens, passwords, login names and free-text exception messages are omitted.
+Technical logs still contain private operation identifiers; keep them in the authorized debugging context.
+There are no schema changes or new runtime dependencies. Deploying these logs requires the normal reviewed backend release and a separate app update on each phone.
+
 ## Upstream references
 
 The PostgreSQL volume and secret-file rules follow the [official image guide](https://hub.docker.com/_/postgres).

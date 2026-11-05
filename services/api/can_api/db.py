@@ -2,9 +2,11 @@ from collections.abc import Iterator
 from functools import lru_cache
 from typing import Any
 
+from fastapi import Request
 from sqlalchemy import Connection, Engine, create_engine, text
 
 from .config import settings
+from .operation_logs import context, emit
 
 
 @lru_cache
@@ -17,9 +19,22 @@ def engine() -> Engine:
     )
 
 
-def transaction() -> Iterator[Connection]:
-    with engine().begin() as connection:
-        yield connection
+def transaction(request: Request) -> Iterator[Connection]:
+    trace = context(request)
+    try:
+        with engine().begin() as connection:
+            yield connection
+    except BaseException as error:
+        # A connection loss during COMMIT can leave the outcome unknown; retry
+        # the same command ID and consult its receipt instead of assuming rollback.
+        if trace:
+            trace["transaction"] = "failed_or_unknown"
+            emit("transaction_failed_or_unknown", trace, exception_type=type(error).__name__)
+        raise
+    else:
+        if trace:
+            trace["transaction"] = "committed"
+            emit("transaction_committed", trace)
 
 
 def rows(connection: Connection, sql: str, **params: Any) -> list[dict[str, Any]]:

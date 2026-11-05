@@ -31,6 +31,7 @@ from .ledger import (
     store_receipt,
     sync,
 )
+from .operation_logs import OperationLogsMiddleware, context
 from .passwords import normalize_login
 from .security import digest, encrypt, identity, invitation_digest, now, rate_limit, token
 
@@ -46,12 +47,14 @@ app.include_router(auth_router)
 
 @app.exception_handler(Problem)
 async def problem_handler(request: Request, error: Problem):
+    context(request)["error_code"] = error.body["code"]
     headers = {"Retry-After": "60"} if error.status == 429 else None
     return JSONResponse(jsonable_encoder(error.body), status_code=error.status, headers=headers)
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_handler(request: Request, error: RequestValidationError):
+    context(request)["error_code"] = "invalid_request"
     # Pydantic errors may include passwords, JWTs or financial payloads in 'input'.
     details = {"fields": [".".join(str(part) for part in item["loc"]) for item in error.errors()]}
     return JSONResponse(Problem("invalid_request", 422, details=details).body, status_code=422)
@@ -64,6 +67,7 @@ async def database_error_handler(request: Request, error: SQLAlchemyError):
         if isinstance(error, IntegrityError)
         else ("database_unavailable", 503)
     )
+    context(request)["error_code"] = code
     return JSONResponse(Problem(code, status, retryable=status == 503).body, status_code=status)
 
 
@@ -107,6 +111,9 @@ async def limit_requests(request: Request, call_next):
                 Problem("database_unavailable", 503, retryable=True).body, status_code=503
             )
     return await call_next(request)
+
+
+app.add_middleware(OperationLogsMiddleware)
 
 
 @app.get("/health/live")
@@ -259,9 +266,22 @@ def accept_invitation(body: schemas.AcceptInvitation, c: DB, authorization: Bear
 
 
 @app.post("/v1/cabinets/{cabinet_id}/commands")
-def commands(cabinet_id: UUID, body: schemas.Command, c: DB, authorization: Bearer = None):
+def commands(
+    cabinet_id: UUID, body: schemas.Command, request: Request, c: DB, authorization: Bearer = None
+):
+    trace = context(request)
+    trace.update(command_id=str(body.command_id), command_type=body.type)
+    for key in ("entry_id", "sprint_id"):
+        if body.payload.get(key):
+            trace[key] = str(body.payload[key])
     user = identity(c, authorization, lock=True)["user_id"]
-    result, status = apply_command(c, user, cabinet_id, body)
+    result, status = apply_command(c, user, cabinet_id, body, diagnostics=trace)
+    trace.update(
+        receipt_status="rejected" if status >= 400 else result.get("status"),
+        result_revision=result.get("result_revision"),
+    )
+    if status >= 400:
+        trace["error_code"] = result.get("code")
     return JSONResponse(jsonable_encoder(result), status_code=status)
 
 
@@ -301,9 +321,19 @@ def own_receipt(command_id: UUID, c: DB, authorization: Bearer = None):
 
 
 @app.post("/v1/cabinets/{cabinet_id}/sync")
-def synchronize(cabinet_id: UUID, body: schemas.SyncRequest, c: DB, authorization: Bearer = None):
+def synchronize(
+    cabinet_id: UUID,
+    body: schemas.SyncRequest,
+    request: Request,
+    c: DB,
+    authorization: Bearer = None,
+):
+    trace = context(request)
+    trace["requested_receipts"] = len(body.unresolved_command_ids)
     user = identity(c, authorization)["user_id"]
-    return sync(c, cabinet_id, user, body.unresolved_command_ids)
+    result = sync(c, cabinet_id, user, body.unresolved_command_ids)
+    trace["snapshot_revision"] = result["snapshot"]["cabinet_revision"]
+    return result
 
 
 @app.get("/v1/cabinets/{cabinet_id}/snapshot")
